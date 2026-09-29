@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -14,9 +15,11 @@ from sqlalchemy import (
     FetchedValue,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -64,15 +67,22 @@ class PantryInventory(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    # `with_variant(Integer, "sqlite")`: ver nota equivalente en ShelfLifeRule.id.
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True
+    )
 
-    # Ajusta el tipo (p. ej. UUID) si tu tabla `users` real usa otra PK.
+    # BigInteger explícito (no inferido del FK): `users` no es un modelo ORM
+    # de esta app (ver nota de la clase), así que si `users` no está
+    # registrada en este `MetaData` el tipo quedaría en NullType y la DDL
+    # fallaría al compilar. Ajusta el tipo (p. ej. UUID) si tu tabla `users`
+    # real usa otra PK.
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
 
     shelf_life_rule_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("shelf_life_rules.id", ondelete="SET NULL"), nullable=True
+        BigInteger, ForeignKey("shelf_life_rules.id", ondelete="SET NULL"), nullable=True
     )
 
     display_name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -94,7 +104,7 @@ class PantryInventory(Base, TimestampMixin):
         server_default=StorageLocation.PANTRY.value,
     )
 
-    is_opened: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_opened: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
     purchase_date: Mapped[date] = mapped_column(
         Date, nullable=False, server_default=func.current_date()
     )
@@ -111,7 +121,7 @@ class PantryInventory(Base, TimestampMixin):
         server_onupdate=FetchedValue(),
     )
 
-    is_consumed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_consumed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
     consumed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

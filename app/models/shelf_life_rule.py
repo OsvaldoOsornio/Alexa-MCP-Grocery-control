@@ -4,7 +4,17 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import CheckConstraint, Enum, Numeric, SmallInteger, String, Text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Enum,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    false,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -39,7 +49,13 @@ class ShelfLifeRule(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    # `with_variant(Integer, "sqlite")`: en Postgres compila a BIGINT (igual
+    # que `BIGINT GENERATED ALWAYS AS IDENTITY` en schema.sql); en SQLite
+    # (usado en tests) compila a INTEGER, el único tipo que SQLite
+    # autoincrementa como alias de rowid.
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True
+    )
 
     ingredient_name: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False, index=True
@@ -80,7 +96,7 @@ class ShelfLifeRule(Base, TimestampMixin):
     )
 
     requires_refrigeration_after_opening: Mapped[bool] = mapped_column(
-        nullable=False, server_default="false"
+        nullable=False, server_default=false()
     )
 
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
