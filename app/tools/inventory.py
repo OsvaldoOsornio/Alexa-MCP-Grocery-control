@@ -44,3 +44,15 @@ def register_inventory_tools(server: FastMCP) -> None:
                 storage_location=storage_location,
                 is_consumed=is_consumed,
             )
+
+    @server.tool()
+    async def ingest_receipt_items(
+        user_id: int,
+        image_base64: str,
+        media_type: str = "image/jpeg",
+    ) -> dict[str, Any]:
+        """Extrae artículos de un recibo en base64 y los agrega al inventario."""
+        async with async_session_factory() as session:
+            return await inventory.ingest_receipt_items(
+                session, user_id, image_base64, media_type
+            )

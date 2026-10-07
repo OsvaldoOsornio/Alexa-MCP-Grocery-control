@@ -100,6 +100,7 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
             assert set(tools_by_name) == {
                 "get_inventory_status",
                 "modify_item_state",
+                "ingest_receipt_items",
             }
 
             status_schema = tools_by_name["get_inventory_status"]["inputSchema"]
@@ -116,6 +117,13 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
                 "refrigerator",
                 "freezer",
             ]
+
+            receipt_schema = tools_by_name["ingest_receipt_items"]["inputSchema"]
+            assert set(receipt_schema["required"]) == {"user_id", "image_base64"}
+            assert (
+                receipt_schema["properties"]["media_type"]["default"]
+                == "image/jpeg"
+            )
 
             status_call = await client.post(
                 "/mcp",
@@ -168,4 +176,36 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
                 opened_date=date(2026, 10, 7),
                 storage_location=StorageLocation.FREEZER,
                 is_consumed=False,
+            )
+
+            receipt_result = {
+                "success": True,
+                "user_id": 17,
+                "count": 1,
+                "items": [{"id": 43, "display_name": "Leche"}],
+            }
+            receipt_mock = AsyncMock(return_value=receipt_result)
+            monkeypatch.setattr(inventory, "ingest_receipt_items", receipt_mock)
+            receipt_call = await client.post(
+                "/mcp",
+                headers=session_headers,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "ingest_receipt_items",
+                        "arguments": {
+                            "user_id": 17,
+                            "image_base64": "ZmFrZS1pbWFnZQ==",
+                        },
+                    },
+                },
+            )
+            assert receipt_call.status_code == 200
+            receipt_rpc_result = _response_json(receipt_call)["result"]
+            assert not receipt_rpc_result.get("isError", False)
+            assert receipt_rpc_result["structuredContent"] == receipt_result
+            receipt_mock.assert_awaited_once_with(
+                fake_session, 17, "ZmFrZS1pbWFnZQ==", "image/jpeg"
             )

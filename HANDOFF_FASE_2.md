@@ -4,7 +4,7 @@
 
 El servidor MCP de Zero-Waste Sous-Chef usa el SDK oficial de Python (`mcp>=1.24,<2`) y transporte **Streamable HTTP**. La versión verificada es `mcp 1.30.0`; negocia la revisión del protocolo `2025-11-25`.
 
-La app y el registro de las tools están en `app/main.py`. Las tools expuestas actualmente son `get_inventory_status` y `modify_item_state`, registradas en `app/tools/inventory.py`; sus operaciones de datos están en `app/services/inventory.py`.
+La app y el registro de las tools están en `app/main.py`. Las tools expuestas actualmente son `get_inventory_status`, `modify_item_state` e `ingest_receipt_items`, registradas en `app/tools/inventory.py`; sus operaciones de datos están en `app/services/inventory.py`.
 
 ## Transporte y métodos MCP
 
@@ -65,6 +65,24 @@ Argumentos aceptados:
 
 La respuesta de éxito es `{"success": true, "item": ...}`. Si el artículo no pertenece al `user_id` indicado o no existe, la tool devuelve `{"success": false, "error": ...}`. Las fechas de caducidad nunca las calcula ni escribe la aplicación: las recalcula el trigger PostgreSQL.
 
+### `ingest_receipt_items`
+
+Extrae líneas de productos alimentarios de una imagen de recibo usando Amazon Bedrock Converse con el model ID configurado (`anthropic.claude-3-5-sonnet-20241022-v2:0` por defecto) e inserta los productos en `pantry_inventory`.
+
+Argumentos aceptados:
+
+```json
+{
+  "user_id": 17,
+  "image_base64": "...base64 sin prefijo data URL...",
+  "media_type": "image/jpeg"
+}
+```
+
+`user_id` e `image_base64` son obligatorios. `media_type` es opcional y por defecto `image/jpeg`; se aceptan `image/jpeg`, `image/png`, `image/gif` e `image/webp`. El contenido decodificado no puede superar 5 MB. La tool contrasta `ingredient_name` con los nombres de `shelf_life_rules`; si encuentra una regla, usa su ubicación por defecto, y si no, inserta el producto libre con ubicación `pantry`. PostgreSQL calcula `expiration_date` mediante su trigger.
+
+La respuesta tiene `success`, `user_id`, `count` e `items`. Cada item contiene `id`, `display_name`, `quantity`, `unit`, `shelf_life_rule_id`, `storage_location` y `expiration_date`. La extracción requiere credenciales AWS disponibles para boto3 y permisos para invocar el modelo Bedrock en `AWS_REGION`.
+
 Ejemplo de llamada JSON-RPC:
 
 ```json
@@ -98,10 +116,10 @@ Antes de invocar tools, la base debe tener aplicado `database/schema.sql` y `dat
 venv\Scripts\python.exe -m pytest -q
 ```
 
-`tests/test_mcp_streamable_http.py` negocia el protocolo por ASGI/HTTP, verifica la sesión, lista schemas y realiza las dos llamadas MCP con la capa de base de datos simulada. No requiere PostgreSQL. Los tests de integración del trigger se omiten salvo que se configure `TEST_DATABASE_URL`.
+`tests/test_mcp_streamable_http.py` negocia el protocolo por ASGI/HTTP, verifica la sesión, lista schemas y realiza las llamadas MCP de las tres tools con la capa de base de datos simulada. Las pruebas de servicio de recibos reemplazan Bedrock por un cliente falso; no requieren credenciales AWS ni PostgreSQL. Los tests de integración del trigger se omiten salvo que se configure `TEST_DATABASE_URL`.
 
 ## Límites conocidos y continuación
 
 El servidor todavía no autentica clientes. `user_id` llega en el payload y sirve para limitar la consulta, pero no prueba la identidad del llamante; no debe exponerse a una red no confiable sin incorporar autenticación/autorización.
 
-Las tools de alta de artículos y generación/adaptación de recetas siguen pendientes. La base de datos real y sus migraciones/seed también deben configurarse por entorno.
+La carga genérica de artículos desde texto/imagen y la generación/adaptación de recetas siguen pendientes; `ingest_receipt_items` solo cubre fotos de recibos. La base de datos real y sus migraciones/seed también deben configurarse por entorno.

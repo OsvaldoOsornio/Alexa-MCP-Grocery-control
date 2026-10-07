@@ -2,15 +2,22 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.models import StorageLocation
-from app.services.inventory import get_inventory_status, modify_item_state
+from app.models import PantryInventory, StorageLocation
+from app.services import inventory as inventory_service
+from app.services.inventory import (
+    get_inventory_status,
+    ingest_receipt_items,
+    modify_item_state,
+)
 
 
 class MappingResult:
@@ -30,6 +37,17 @@ class ScalarResult:
 
     def scalar_one_or_none(self):
         return self.value
+
+
+class ScalarCollectionResult:
+    def __init__(self, values):
+        self.values = values
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.values
 
 
 def test_get_inventory_status_uses_user_scope_and_serializable_values():
@@ -119,6 +137,105 @@ def test_modify_item_state_rejects_opened_date_without_opened_state():
                 user_id=12,
                 item_id=4,
                 opened_date=date.today(),
+            )
+        )
+
+    session.execute.assert_not_awaited()
+
+
+def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeypatch):
+    extracted_items = {
+        "items": [
+            {
+                "display_name": "Leche entera",
+                "ingredient_name": "Leche entera",
+                "quantity": 2,
+                "unit": "litros",
+            },
+            {
+                "display_name": "Galletas",
+                "ingredient_name": None,
+                "quantity": 1,
+                "unit": "paquete",
+            },
+        ]
+    }
+
+    class FakeBedrockClient:
+        request = None
+
+        def converse(self, **kwargs):
+            self.request = kwargs
+            return {
+                "output": {
+                    "message": {
+                        "content": [{"text": json.dumps(extracted_items)}]
+                    }
+                }
+            }
+
+    bedrock_client = FakeBedrockClient()
+    monkeypatch.setattr(
+        inventory_service.boto3,
+        "client",
+        lambda service_name, region_name: bedrock_client,
+    )
+    milk_rule = SimpleNamespace(
+        id=8,
+        ingredient_name="Leche entera",
+        default_storage=StorageLocation.REFRIGERATOR,
+    )
+    session = SimpleNamespace(
+        execute=AsyncMock(return_value=ScalarCollectionResult([milk_rule])),
+        add_all=Mock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+    receipt_image = b"fake-receipt-image"
+    image_base64 = base64.b64encode(receipt_image).decode("ascii")
+
+    result = asyncio.run(
+        ingest_receipt_items(
+            session,
+            user_id=17,
+            image_base64=image_base64,
+            media_type="image/jpeg",
+        )
+    )
+
+    request = bedrock_client.request
+    assert request["modelId"] == inventory_service.get_settings().bedrock_model_id
+    image_block = request["messages"][0]["content"][1]["image"]
+    assert image_block == {
+        "format": "jpeg",
+        "source": {"bytes": receipt_image},
+    }
+    assert "Leche entera" in request["messages"][0]["content"][0]["text"]
+
+    session.execute.assert_awaited_once()
+    session.commit.assert_awaited_once()
+    inserted_items = session.add_all.call_args.args[0]
+    assert len(inserted_items) == 2
+    assert all(isinstance(item, PantryInventory) for item in inserted_items)
+    assert inserted_items[0].user_id == 17
+    assert inserted_items[0].shelf_life_rule_id == 8
+    assert inserted_items[0].storage_location is StorageLocation.REFRIGERATOR
+    assert inserted_items[1].shelf_life_rule_id is None
+    assert inserted_items[1].storage_location is StorageLocation.PANTRY
+    assert result["success"] is True
+    assert result["count"] == 2
+
+
+def test_ingest_receipt_items_rejects_invalid_base64_before_database_access():
+    session = SimpleNamespace(execute=AsyncMock())
+
+    with pytest.raises(ValueError, match="base64 válido"):
+        asyncio.run(
+            ingest_receipt_items(
+                session,
+                user_id=17,
+                image_base64="not base64!",
             )
         )
 
