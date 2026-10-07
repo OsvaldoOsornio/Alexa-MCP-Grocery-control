@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -169,7 +169,15 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
             return {
                 "output": {
                     "message": {
-                        "content": [{"text": json.dumps(extracted_items)}]
+                        "content": [
+                            {
+                                "text": (
+                                    "```json\n"
+                                    f"{json.dumps(extracted_items)}\n"
+                                    "```"
+                                )
+                            }
+                        ]
                     }
                 }
             }
@@ -184,13 +192,25 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
         id=8,
         ingredient_name="Leche entera",
         default_storage=StorageLocation.REFRIGERATOR,
+        shelf_life_days_unopened=10,
     )
+    refreshed_items = []
+
+    async def refresh_from_database(item):
+        assert item.expiration_date is None
+        item.id = 100 + len(refreshed_items)
+        if item.shelf_life_rule_id == milk_rule.id:
+            item.expiration_date = date.today() + timedelta(
+                days=milk_rule.shelf_life_days_unopened
+            )
+        refreshed_items.append(item)
+
     session = SimpleNamespace(
         execute=AsyncMock(return_value=ScalarCollectionResult([milk_rule])),
         add_all=Mock(),
         commit=AsyncMock(),
         rollback=AsyncMock(),
-        refresh=AsyncMock(),
+        refresh=AsyncMock(side_effect=refresh_from_database),
     )
     receipt_image = b"fake-receipt-image"
     image_base64 = base64.b64encode(receipt_image).decode("ascii")
@@ -225,6 +245,10 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
     assert inserted_items[1].storage_location is StorageLocation.PANTRY
     assert result["success"] is True
     assert result["count"] == 2
+    assert result["items"][0]["expiration_date"] == (
+        date.today() + timedelta(days=milk_rule.shelf_life_days_unopened)
+    ).isoformat()
+    assert result["items"][1]["expiration_date"] is None
 
 
 def test_ingest_receipt_items_rejects_invalid_base64_before_database_access():
