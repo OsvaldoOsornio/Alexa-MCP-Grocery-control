@@ -7,14 +7,15 @@ import {
   Sparkles, Upload, X,
 } from "lucide-react";
 import Image from "next/image";
+import { StatusPill } from "@/components/status-pill";
 import {
   useDeferredValue, useEffect, useRef, useState,
   type ChangeEvent, type CSSProperties, type DragEvent,
 } from "react";
 import {
   createDemoInventory, createDemoReceiptItems, DEMO_USER_ID, formatDate,
-  initialDemoEvents, locationLabel, statusLabel,
-  type DemoEvent, type InventoryItem, type InventoryStatus,
+  initialDemoEvents, locationLabel,
+  type DemoEvent, type InventoryItem,
   type InventoryStatusResponse, type StorageLocation,
 } from "@/lib/kitchen-data";
 
@@ -70,10 +71,6 @@ function EventMark({ kind }: { kind: DemoEvent["kind"] }) {
   if (kind === "opened") return <Sparkles size={15} />;
   if (kind === "consumed") return <CircleCheck size={15} />;
   return <Snowflake size={15} />;
-}
-
-function StatusPill({ status }: { status: InventoryStatus }) {
-  return <span className={`status-pill status-${status}`}><span className="status-dot" />{statusLabel(status)}</span>;
 }
 
 export default function Home() {
