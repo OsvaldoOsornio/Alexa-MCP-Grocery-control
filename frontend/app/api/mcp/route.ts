@@ -1,0 +1,38 @@
+import { callMcpTool, type McpToolName } from "@/lib/mcp-client";
+
+const allowedTools = new Set<McpToolName>([
+  "get_inventory_status",
+  "modify_item_state",
+  "ingest_receipt_items",
+]);
+
+export async function POST(request: Request) {
+  let body: { tool?: string; arguments?: unknown };
+  try {
+    body = (await request.json()) as { tool?: string; arguments?: unknown };
+  } catch {
+    return Response.json({ error: "El cuerpo debe ser JSON válido." }, { status: 400 });
+  }
+
+  if (!body.tool || !allowedTools.has(body.tool as McpToolName)) {
+    return Response.json({ error: "Tool MCP no permitida." }, { status: 400 });
+  }
+  if (
+    !body.arguments ||
+    typeof body.arguments !== "object" ||
+    Array.isArray(body.arguments)
+  ) {
+    return Response.json({ error: "arguments debe ser un objeto JSON." }, { status: 400 });
+  }
+
+  try {
+    const data = await callMcpTool(
+      body.tool as McpToolName,
+      body.arguments as Record<string, unknown>,
+    );
+    return Response.json({ data, source: "mcp" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "No se pudo conectar al servidor MCP.";
+    return Response.json({ error: message }, { status: 503 });
+  }
+}
