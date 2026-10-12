@@ -44,6 +44,10 @@ function dateAfter(days: number, origin = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
+// Pinned to a fixed origin on purpose: this data seeds the initial React
+// state, which renders on the server as well as the client, and a date
+// derived from `new Date()` there would produce a hydration mismatch.
+// The trade-off is that these demo dates drift from "today" over time.
 function demoDateAfter(days: number): string {
   return dateAfter(days, new Date("2026-10-07T12:00:00"));
 }
@@ -53,12 +57,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 101,
       user_id: DEMO_USER_ID,
-      display_name: "Tomates de rama",
-      ingredient_name: "Tomate",
+      display_name: "Vine tomatoes",
+      ingredient_name: "Tomato",
       category: "produce",
       storage_location: "refrigerator",
       quantity: "6.00",
-      unit: "unidades",
+      unit: "units",
       is_opened: false,
       expiration_date: demoDateAfter(2),
       days_remaining: 2,
@@ -67,12 +71,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 102,
       user_id: DEMO_USER_ID,
-      display_name: "Yogur natural",
-      ingredient_name: "Yogur",
+      display_name: "Plain yogurt",
+      ingredient_name: "Plain yogurt",
       category: "dairy",
       storage_location: "refrigerator",
       quantity: "4.00",
-      unit: "unidades",
+      unit: "units",
       is_opened: true,
       expiration_date: demoDateAfter(5),
       days_remaining: 5,
@@ -81,12 +85,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 103,
       user_id: DEMO_USER_ID,
-      display_name: "Espinaca baby",
-      ingredient_name: "Espinaca",
+      display_name: "Baby spinach",
+      ingredient_name: "Spinach",
       category: "produce",
       storage_location: "refrigerator",
       quantity: "120.00",
-      unit: "gramos",
+      unit: "grams",
       is_opened: true,
       expiration_date: demoDateAfter(-1),
       days_remaining: -1,
@@ -95,12 +99,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 104,
       user_id: DEMO_USER_ID,
-      display_name: "Huevos camperos",
-      ingredient_name: "Huevos",
+      display_name: "Free-range eggs",
+      ingredient_name: "Eggs",
       category: "dairy",
       storage_location: "refrigerator",
       quantity: "10.00",
-      unit: "unidades",
+      unit: "units",
       is_opened: false,
       expiration_date: demoDateAfter(12),
       days_remaining: 12,
@@ -109,12 +113,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 105,
       user_id: DEMO_USER_ID,
-      display_name: "Arroz basmati",
-      ingredient_name: "Arroz",
+      display_name: "Basmati rice",
+      ingredient_name: "White rice",
       category: "pantry_staple",
       storage_location: "pantry",
       quantity: "750.00",
-      unit: "gramos",
+      unit: "grams",
       is_opened: false,
       expiration_date: demoDateAfter(120),
       days_remaining: 120,
@@ -123,12 +127,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 106,
       user_id: DEMO_USER_ID,
-      display_name: "Pan de masa madre",
-      ingredient_name: "Pan",
+      display_name: "Sourdough loaf",
+      ingredient_name: "Bread",
       category: "bakery",
       storage_location: "pantry",
       quantity: "1.00",
-      unit: "barra",
+      unit: "loaf",
       is_opened: false,
       expiration_date: null,
       days_remaining: null,
@@ -137,12 +141,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 107,
       user_id: DEMO_USER_ID,
-      display_name: "Pechuga de pollo",
-      ingredient_name: "Pollo crudo",
+      display_name: "Chicken breast",
+      ingredient_name: "Raw chicken (breast)",
       category: "meat_poultry",
       storage_location: "freezer",
       quantity: "450.00",
-      unit: "gramos",
+      unit: "grams",
       is_opened: false,
       expiration_date: demoDateAfter(1),
       days_remaining: 1,
@@ -151,12 +155,12 @@ export function createDemoInventory(): InventoryItem[] {
     {
       id: 108,
       user_id: DEMO_USER_ID,
-      display_name: "Mantequilla",
-      ingredient_name: "Mantequilla",
+      display_name: "Butter",
+      ingredient_name: "Butter",
       category: "dairy",
       storage_location: "refrigerator",
       quantity: "0.00",
-      unit: "paquetes",
+      unit: "packs",
       is_opened: false,
       expiration_date: demoDateAfter(20),
       days_remaining: 20,
@@ -170,12 +174,12 @@ export function createDemoReceiptItems(startId: number): InventoryItem[] {
     {
       id: startId,
       user_id: DEMO_USER_ID,
-      display_name: "Limones",
+      display_name: "Lemons",
       ingredient_name: null,
       category: null,
       storage_location: "pantry",
       quantity: "4.00",
-      unit: "unidades",
+      unit: "units",
       is_opened: false,
       expiration_date: dateAfter(9),
       days_remaining: 9,
@@ -184,12 +188,12 @@ export function createDemoReceiptItems(startId: number): InventoryItem[] {
     {
       id: startId + 1,
       user_id: DEMO_USER_ID,
-      display_name: "Garbanzos cocidos",
+      display_name: "Cooked chickpeas",
       ingredient_name: null,
       category: null,
       storage_location: "pantry",
       quantity: "2.00",
-      unit: "botes",
+      unit: "cans",
       is_opened: false,
       expiration_date: dateAfter(30),
       days_remaining: 30,
@@ -201,30 +205,30 @@ export function createDemoReceiptItems(startId: number): InventoryItem[] {
 export const initialDemoEvents: DemoEvent[] = [
   {
     id: 1,
-    title: "Yogur marcado como abierto",
-    detail: "Yogur natural · ayer, 18:42",
+    title: "Yogurt marked as opened",
+    detail: "Plain yogurt · yesterday, 18:42",
     time: "18:42",
     kind: "opened",
   },
   {
     id: 2,
-    title: "Recibo procesado",
-    detail: "Supermercado del barrio · lunes",
-    time: "Lun",
+    title: "Receipt processed",
+    detail: "Corner supermarket · Monday",
+    time: "Mon",
     kind: "receipt",
   },
   {
     id: 3,
-    title: "Pollo movido al congelador",
-    detail: "Pechuga de pollo · lunes",
-    time: "Lun",
+    title: "Chicken moved to the freezer",
+    detail: "Chicken breast · Monday",
+    time: "Mon",
     kind: "moved",
   },
 ];
 
 export function formatDate(value: string | null): string {
-  if (!value) return "Sin fecha";
-  return new Intl.DateTimeFormat("es", {
+  if (!value) return "No date";
+  return new Intl.DateTimeFormat("en", {
     day: "numeric",
     month: "short",
   }).format(new Date(`${value}T12:00:00`));
@@ -232,20 +236,20 @@ export function formatDate(value: string | null): string {
 
 export function statusLabel(status: InventoryStatus): string {
   const labels: Record<InventoryStatus, string> = {
-    fresh: "En buen estado",
-    expiring_soon: "Por vencer",
-    expired: "Vencido",
-    consumed: "Consumido",
-    unknown: "Sin fecha",
+    fresh: "Fresh",
+    expiring_soon: "Expiring soon",
+    expired: "Expired",
+    consumed: "Consumed",
+    unknown: "No date",
   };
   return labels[status];
 }
 
 export function locationLabel(location: StorageLocation): string {
   const labels: Record<StorageLocation, string> = {
-    pantry: "Despensa",
-    refrigerator: "Refrigerador",
-    freezer: "Congelador",
+    pantry: "Pantry",
+    refrigerator: "Refrigerator",
+    freezer: "Freezer",
   };
   return labels[location];
 }

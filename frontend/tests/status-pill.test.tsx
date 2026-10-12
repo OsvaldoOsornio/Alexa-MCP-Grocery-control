@@ -11,14 +11,14 @@ const colorClasses: Record<InventoryStatus, string> = {
   unknown: "status-unknown",
 };
 
-describe("StatusPill semáforo", () => {
+describe("StatusPill traffic light", () => {
   it.each([
-    ["fresh", "En buen estado"],
-    ["expiring_soon", "Por vencer"],
-    ["expired", "Vencido"],
-    ["consumed", "Consumido"],
-    ["unknown", "Sin fecha"],
-  ] as const)("aplica color y etiqueta para %s", (status, label) => {
+    ["fresh", "Fresh"],
+    ["expiring_soon", "Expiring soon"],
+    ["expired", "Expired"],
+    ["consumed", "Consumed"],
+    ["unknown", "No date"],
+  ] as const)("applies the colour and label for %s", (status, label) => {
     render(<StatusPill status={status} />);
 
     const indicator = screen.getByRole("status", { name: label });
@@ -26,15 +26,15 @@ describe("StatusPill semáforo", () => {
     expect(indicator.querySelector(".status-dot")).toBeInTheDocument();
   });
 
-  it("cambia la clase de color al cambiar de estado", () => {
+  it("changes the colour class when the status changes", () => {
     const { rerender } = render(<StatusPill status="fresh" />);
-    const freshIndicator = screen.getByRole("status", { name: "En buen estado" });
+    const freshIndicator = screen.getByRole("status", { name: "Fresh" });
 
     expect(freshIndicator).toHaveClass("status-fresh");
 
     rerender(<StatusPill status="expired" />);
 
-    const expiredIndicator = screen.getByRole("status", { name: "Vencido" });
+    const expiredIndicator = screen.getByRole("status", { name: "Expired" });
     expect(expiredIndicator).toHaveClass("status-expired");
     expect(expiredIndicator).not.toHaveClass("status-fresh");
   });

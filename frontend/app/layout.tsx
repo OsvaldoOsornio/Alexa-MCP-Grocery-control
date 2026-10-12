@@ -14,13 +14,13 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Despensa Viva | Cocina",
-  description: "Simula eventos y consulta el semáforo de tu inventario de cocina.",
+  title: "Eat Me First | Kitchen",
+  description: "Simulate kitchen events and read your inventory traffic light.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={`${manrope.variable} ${dmMono.variable}`}>
+    <html lang="en" className={`${manrope.variable} ${dmMono.variable}`}>
       <body>{children}</body>
     </html>
   );

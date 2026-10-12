@@ -11,18 +11,18 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { tool?: string; arguments?: unknown };
   } catch {
-    return Response.json({ error: "El cuerpo debe ser JSON válido." }, { status: 400 });
+    return Response.json({ error: "The body must be valid JSON." }, { status: 400 });
   }
 
   if (!body.tool || !allowedTools.has(body.tool as McpToolName)) {
-    return Response.json({ error: "Tool MCP no permitida." }, { status: 400 });
+    return Response.json({ error: "MCP tool not allowed." }, { status: 400 });
   }
   if (
     !body.arguments ||
     typeof body.arguments !== "object" ||
     Array.isArray(body.arguments)
   ) {
-    return Response.json({ error: "arguments debe ser un objeto JSON." }, { status: 400 });
+    return Response.json({ error: "arguments must be a JSON object." }, { status: 400 });
   }
 
   try {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     );
     return Response.json({ data, source: "mcp" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "No se pudo conectar al servidor MCP.";
+    const message = error instanceof Error ? error.message : "Could not connect to the MCP server.";
     return Response.json({ error: message }, { status: 503 });
   }
 }
