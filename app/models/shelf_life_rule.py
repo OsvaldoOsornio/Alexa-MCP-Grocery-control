@@ -1,4 +1,4 @@
-"""Modelo ORM para el catálogo maestro `shelf_life_rules`."""
+"""ORM model for the master catalog `shelf_life_rules`."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -25,12 +25,12 @@ if TYPE_CHECKING:
 
 
 class ShelfLifeRule(Base, TimestampMixin):
-    """Catálogo maestro: días de caducidad por defecto por ingrediente.
+    """Master catalog: default shelf life in days per ingredient.
 
-    `create_type=False` en los ENUM porque database/schema.sql ya crea los
-    tipos `ingredient_category` / `storage_location` en Postgres; este
-    modelo asume que la DDL fue aplicada por separado (migración/psql), no
-    vía `Base.metadata.create_all`.
+    `create_type=False` on the ENUMs because database/schema.sql already
+    creates the `ingredient_category` / `storage_location` types in
+    Postgres; this model assumes the DDL was applied separately (migration
+    or psql), not via `Base.metadata.create_all`.
     """
 
     __tablename__ = "shelf_life_rules"
@@ -49,10 +49,10 @@ class ShelfLifeRule(Base, TimestampMixin):
         ),
     )
 
-    # `with_variant(Integer, "sqlite")`: en Postgres compila a BIGINT (igual
-    # que `BIGINT GENERATED ALWAYS AS IDENTITY` en schema.sql); en SQLite
-    # (usado en tests) compila a INTEGER, el único tipo que SQLite
-    # autoincrementa como alias de rowid.
+    # `with_variant(Integer, "sqlite")`: on Postgres this compiles to BIGINT
+    # (the same as `BIGINT GENERATED ALWAYS AS IDENTITY` in schema.sql); on
+    # SQLite (used in the tests) it compiles to INTEGER, the only type SQLite
+    # autoincrements as a rowid alias.
     id: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), primary_key=True
     )
@@ -81,16 +81,16 @@ class ShelfLifeRule(Base, TimestampMixin):
         nullable=False,
     )
 
-    # Días de vida útil sin abrir, en `default_storage`.
+    # Shelf life in days while unopened, in `default_storage`.
     shelf_life_days_unopened: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
-    # Multiplicador aplicado a `shelf_life_days_unopened` una vez abierto
-    # (ej. 0.50 = la mitad de días desde la fecha de apertura).
+    # Multiplier applied to `shelf_life_days_unopened` once opened
+    # (e.g. 0.50 = half the days, counted from the opened date).
     open_shelf_life_multiplier: Mapped[Decimal] = mapped_column(
         Numeric(3, 2), nullable=False, server_default="1.00"
     )
 
-    # Días de vida útil si se congela; NULL si no es recomendable/aplicable.
+    # Shelf life in days if frozen; NULL when not advisable/applicable.
     frozen_shelf_life_days: Mapped[Optional[int]] = mapped_column(
         SmallInteger, nullable=True
     )

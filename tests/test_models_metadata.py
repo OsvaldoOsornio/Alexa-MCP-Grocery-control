@@ -1,9 +1,9 @@
-"""Tests de estructura de los modelos vía introspección de metadata.
+"""Structural tests of the models via metadata introspection.
 
-No requieren conexión a ninguna base de datos: verifican que las columnas,
-tipos, FKs y constraints declaradas en los modelos SQLAlchemy coinciden con
-lo documentado en database/schema.sql. Sirven como "contrato" para detectar
-si alguien cambia un modelo sin actualizar el otro (o viceversa).
+They need no database connection: they check that the columns, types,
+foreign keys and constraints declared in the SQLAlchemy models match what is
+documented in database/schema.sql. They act as a "contract" that catches
+someone changing one without updating the other.
 """
 from __future__ import annotations
 
@@ -93,16 +93,16 @@ def test_pantry_inventory_shelf_life_rule_id_sets_null_on_delete():
 
 
 def test_no_column_is_left_as_undetermined_type():
-    """Regresión: `user_id` llegó a resolver a NullType() por depender de que
-    `users` estuviera registrada en el mismo MetaData (ver historial de
-    app/models/pantry_inventory.py). Este test evita que vuelva a pasar
-    desapercibido para cualquier columna de los dos modelos.
+    """Regression: `user_id` once resolved to NullType() because it depended on
+    `users` being registered in the same MetaData (see the history of
+    app/models/pantry_inventory.py). This test stops that going unnoticed
+    again for any column of either model.
     """
     from sqlalchemy.sql.sqltypes import NullType
 
     for model in (ShelfLifeRule, PantryInventory):
         for column in model.__table__.columns:
             assert not isinstance(column.type, NullType), (
-                f"{model.__tablename__}.{column.name} no tiene un tipo explícito "
-                "resoluble sin depender de otro modelo estar importado."
+                f"{model.__tablename__}.{column.name} has no explicit type "
+                "resolvable without another model being imported."
             )

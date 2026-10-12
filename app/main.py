@@ -1,4 +1,4 @@
-"""Entry point del servidor MCP (transporte Streamable HTTP)."""
+"""Entry point for the MCP server (Streamable HTTP transport)."""
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
@@ -17,7 +17,7 @@ register_inventory_tools(mcp)
 
 
 def main() -> None:
-    """Arranca el servidor MCP."""
+    """Start the MCP server."""
     mcp.run(transport="streamable-http")
 
 

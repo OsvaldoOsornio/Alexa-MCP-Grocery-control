@@ -1,4 +1,4 @@
-"""Esquemas Pydantic v2 para `pantry_inventory`."""
+"""Pydantic v2 schemas for `pantry_inventory`."""
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -14,11 +14,11 @@ from .shelf_life_rule import ShelfLifeRuleRead
 
 class PantryInventoryBase(BaseModel):
     shelf_life_rule_id: Optional[int] = Field(
-        None, description="Referencia al catálogo shelf_life_rules; NULL si es un ítem libre."
+        None, description="Reference to the shelf_life_rules catalog; NULL for a free item."
     )
-    display_name: str = Field(..., max_length=150, examples=["Leche entera Alqueria"])
+    display_name: str = Field(..., max_length=150, examples=["Alqueria whole milk"])
     quantity: Decimal = Field(Decimal("1"), ge=0)
-    unit: str = Field("unidad", max_length=20)
+    unit: str = Field("unit", max_length=20)
     storage_location: StorageLocation = StorageLocation.PANTRY
     is_opened: bool = False
     purchase_date: date = Field(default_factory=date.today)
@@ -42,7 +42,7 @@ class PantryInventoryCreate(PantryInventoryBase):
 
 
 class PantryInventoryUpdate(BaseModel):
-    """Todos los campos opcionales: para PATCH parcial (ej. marcar como abierto/consumido)."""
+    """All fields optional: for a partial PATCH (e.g. mark opened/consumed)."""
 
     shelf_life_rule_id: Optional[int] = None
     display_name: Optional[str] = Field(None, max_length=150)
@@ -62,7 +62,7 @@ class PantryInventoryRead(PantryInventoryBase):
     id: int
     user_id: int
 
-    # Calculada en la base de datos por el trigger `calculate_pantry_expiration`.
+    # Calculated in the database by the `calculate_pantry_expiration` trigger.
     expiration_date: Optional[date] = None
 
     is_consumed: bool

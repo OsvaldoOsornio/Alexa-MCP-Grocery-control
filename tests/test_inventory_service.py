@@ -1,4 +1,4 @@
-"""Pruebas unitarias de las operaciones de inventario para las tools MCP."""
+"""Unit tests for the inventory operations behind the MCP tools."""
 from __future__ import annotations
 
 import asyncio
@@ -58,8 +58,8 @@ def test_get_inventory_status_uses_user_scope_and_serializable_values():
                     {
                         "id": 4,
                         "user_id": 12,
-                        "display_name": "Leche",
-                        "ingredient_name": "Leche entera",
+                        "display_name": "Milk",
+                        "ingredient_name": "Whole milk",
                         "category": "dairy",
                         "storage_location": "refrigerator",
                         "quantity": Decimal("1.50"),
@@ -89,7 +89,7 @@ def test_modify_item_state_updates_opened_consumed_and_location():
     item = SimpleNamespace(
         id=4,
         user_id=12,
-        display_name="Leche",
+        display_name="Milk",
         purchase_date=date(2026, 10, 1),
         is_opened=False,
         opened_date=None,
@@ -130,7 +130,7 @@ def test_modify_item_state_updates_opened_consumed_and_location():
 def test_modify_item_state_rejects_opened_date_without_opened_state():
     session = SimpleNamespace(execute=AsyncMock())
 
-    with pytest.raises(ValueError, match="requiere is_opened=True"):
+    with pytest.raises(ValueError, match="requires is_opened=True"):
         asyncio.run(
             modify_item_state(
                 session,
@@ -147,8 +147,8 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
     extracted_items = {
         "items": [
             {
-                "display_name": "Leche entera",
-                "ingredient_name": "Leche entera",
+                "display_name": "Whole milk",
+                "ingredient_name": "Whole milk",
                 "quantity": 2,
                 "unit": "litros",
             },
@@ -190,7 +190,7 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
     )
     milk_rule = SimpleNamespace(
         id=8,
-        ingredient_name="Leche entera",
+        ingredient_name="Whole milk",
         default_storage=StorageLocation.REFRIGERATOR,
         shelf_life_days_unopened=10,
     )
@@ -231,7 +231,7 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
         "format": "jpeg",
         "source": {"bytes": receipt_image},
     }
-    assert "Leche entera" in request["messages"][0]["content"][0]["text"]
+    assert "Whole milk" in request["messages"][0]["content"][0]["text"]
 
     session.execute.assert_awaited_once()
     session.commit.assert_awaited_once()
@@ -254,7 +254,7 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
 def test_ingest_receipt_items_rejects_invalid_base64_before_database_access():
     session = SimpleNamespace(execute=AsyncMock())
 
-    with pytest.raises(ValueError, match="base64 válido"):
+    with pytest.raises(ValueError, match="valid base64"):
         asyncio.run(
             ingest_receipt_items(
                 session,

@@ -1,4 +1,4 @@
-"""Configuración de la aplicación vía variables de entorno."""
+"""Application configuration via environment variables."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Settings cargados desde el entorno / archivo .env."""
+    """Settings loaded from the environment or a .env file."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -23,5 +23,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Devuelve la instancia cacheada de Settings."""
+    """Return the cached Settings instance."""
     return Settings()

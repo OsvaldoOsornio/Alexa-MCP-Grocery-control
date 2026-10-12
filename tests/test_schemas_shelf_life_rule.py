@@ -1,4 +1,4 @@
-"""Tests de los esquemas Pydantic v2 de `shelf_life_rules`."""
+"""Tests for the `shelf_life_rules` Pydantic v2 schemas."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -11,7 +11,7 @@ from app.schemas import ShelfLifeRuleCreate, ShelfLifeRuleRead, ShelfLifeRuleUpd
 
 def _valid_payload(**overrides) -> dict:
     payload = dict(
-        ingredient_name="Leche entera",
+        ingredient_name="Whole milk",
         category="dairy",
         default_storage="refrigerator",
         shelf_life_days_unopened=10,
@@ -24,7 +24,7 @@ def _valid_payload(**overrides) -> dict:
 
 def test_create_schema_accepts_valid_payload():
     rule = ShelfLifeRuleCreate(**_valid_payload())
-    assert rule.ingredient_name == "Leche entera"
+    assert rule.ingredient_name == "Whole milk"
     assert rule.open_shelf_life_multiplier == Decimal("0.70")
     assert rule.requires_refrigeration_after_opening is False  # default
 
@@ -60,8 +60,8 @@ def test_unknown_storage_location_is_rejected():
 
 
 def test_update_schema_allows_partial_payload():
-    update = ShelfLifeRuleUpdate(notes="Se degrada más rápido en verano")
-    assert update.notes == "Se degrada más rápido en verano"
+    update = ShelfLifeRuleUpdate(notes="Degrades faster in summer")
+    assert update.notes == "Degrades faster in summer"
     assert update.category is None
     assert update.shelf_life_days_unopened is None
 
@@ -71,7 +71,7 @@ def test_update_schema_allows_partial_payload():
     [
         (10, Decimal("0.70"), 7),   # round(7.0) == 7
         (14, Decimal("0.50"), 7),
-        (1, Decimal("0.10"), 1),     # el mínimo garantizado es 1 día
+        (1, Decimal("0.10"), 1),     # the guaranteed minimum is 1 day
         (365, Decimal("1.00"), 365),
     ],
 )

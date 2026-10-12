@@ -1,4 +1,4 @@
-"""Modelos ORM (SQLAlchemy 2.0) del inventario de cocina zero-waste."""
+"""ORM models (SQLAlchemy 2.0) for the zero-waste kitchen inventory."""
 from .base import Base, TimestampMixin
 from .enums import IngredientCategory, StorageLocation
 from .pantry_inventory import PantryInventory

@@ -1,4 +1,4 @@
-"""Tests de los esquemas Pydantic v2 de `pantry_inventory`."""
+"""Tests for the `pantry_inventory` Pydantic v2 schemas."""
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -11,7 +11,7 @@ from app.schemas import PantryInventoryCreate, PantryInventoryUpdate
 
 
 def _valid_payload(**overrides) -> dict:
-    payload = dict(display_name="Leche Alqueria", shelf_life_rule_id=1)
+    payload = dict(display_name="Alqueria milk", shelf_life_rule_id=1)
     payload.update(overrides)
     return payload
 
@@ -19,7 +19,7 @@ def _valid_payload(**overrides) -> dict:
 def test_create_schema_accepts_minimal_valid_payload():
     item = PantryInventoryCreate(**_valid_payload())
     assert item.quantity == Decimal("1")
-    assert item.unit == "unidad"
+    assert item.unit == "unit"
     assert item.storage_location == "pantry"
     assert item.is_opened is False
     assert item.purchase_date == date.today()

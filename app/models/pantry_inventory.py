@@ -1,4 +1,4 @@
-"""Modelo ORM para el stock del usuario `pantry_inventory`."""
+"""ORM model for the user stock table `pantry_inventory`."""
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -32,15 +32,15 @@ if TYPE_CHECKING:
 
 
 class PantryInventory(Base, TimestampMixin):
-    """Stock actual de despensa/refrigerador/congelador por usuario.
+    """Current pantry/refrigerator/freezer stock per user.
 
-    `expiration_date` NO se calcula en Python: lo recalcula el trigger de
-    Postgres `calculate_pantry_expiration` en cada INSERT/UPDATE (ver
-    database/schema.sql), a partir de `shelf_life_rule`, `is_opened`,
-    `purchase_date`/`opened_date` y `storage_location`. Se marca con
-    `FetchedValue()` para que SQLAlchemy sepa que debe refrescar la columna
-    desde el servidor tras cada flush (vía RETURNING) en lugar de asumir
-    el valor que tenía en memoria.
+    `expiration_date` is NOT calculated in Python: the Postgres trigger
+    `calculate_pantry_expiration` recomputes it on every INSERT/UPDATE (see
+    database/schema.sql) from `shelf_life_rule`, `is_opened`,
+    `purchase_date`/`opened_date` and `storage_location`. It is marked with
+    `FetchedValue()` so SQLAlchemy knows to refresh the column from the
+    server after each flush (via RETURNING) instead of trusting the value
+    it held in memory.
     """
 
     __tablename__ = "pantry_inventory"
@@ -67,16 +67,16 @@ class PantryInventory(Base, TimestampMixin):
         ),
     )
 
-    # `with_variant(Integer, "sqlite")`: ver nota equivalente en ShelfLifeRule.id.
+    # `with_variant(Integer, "sqlite")`: see the equivalent note on ShelfLifeRule.id.
     id: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), primary_key=True
     )
 
-    # BigInteger explícito (no inferido del FK): `users` no es un modelo ORM
-    # de esta app (ver nota de la clase), así que si `users` no está
-    # registrada en este `MetaData` el tipo quedaría en NullType y la DDL
-    # fallaría al compilar. Ajusta el tipo (p. ej. UUID) si tu tabla `users`
-    # real usa otra PK.
+    # Explicit BigInteger (not inferred from the FK): `users` is not an ORM
+    # model of this app (see the class note), so if `users` is not registered
+    # in this `MetaData` the type would fall back to NullType and the DDL
+    # would fail to compile. Change the type (e.g. UUID) if your real `users`
+    # table uses a different primary key.
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -90,7 +90,7 @@ class PantryInventory(Base, TimestampMixin):
     quantity: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, server_default="1"
     )
-    unit: Mapped[str] = mapped_column(String(20), nullable=False, server_default="unidad")
+    unit: Mapped[str] = mapped_column(String(20), nullable=False, server_default="unit")
 
     storage_location: Mapped[StorageLocation] = mapped_column(
         Enum(
@@ -110,10 +110,10 @@ class PantryInventory(Base, TimestampMixin):
     )
     opened_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
-    # Fijada manualmente por el usuario; siempre gana sobre el cálculo automático.
+    # Set manually by the user; always wins over the automatic calculation.
     custom_expiration_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
-    # Calculada por trigger — no escribir directamente desde la app.
+    # Calculated by the trigger - do not write it directly from the app.
     expiration_date: Mapped[Optional[date]] = mapped_column(
         Date,
         nullable=True,

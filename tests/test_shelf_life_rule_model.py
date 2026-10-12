@@ -1,4 +1,4 @@
-"""Tests del modelo ORM `ShelfLifeRule` (catálogo maestro de caducidad)."""
+"""Tests for the `ShelfLifeRule` ORM model (the master expiry catalog)."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -45,7 +45,7 @@ def test_ingredient_name_is_unique(session, milk_rule):
 @pytest.mark.parametrize("invalid_days", [0, -1])
 def test_shelf_life_days_unopened_must_be_positive(session, invalid_days):
     rule = ShelfLifeRule(
-        ingredient_name="Ingrediente inválido",
+        ingredient_name="Invalid ingredient",
         category="other",
         default_storage="pantry",
         shelf_life_days_unopened=invalid_days,
@@ -59,7 +59,7 @@ def test_shelf_life_days_unopened_must_be_positive(session, invalid_days):
 @pytest.mark.parametrize("invalid_multiplier", ["0.00", "-0.10", "1.01", "2.00"])
 def test_open_shelf_life_multiplier_must_be_in_range(session, invalid_multiplier):
     rule = ShelfLifeRule(
-        ingredient_name="Ingrediente multiplicador inválido",
+        ingredient_name="Invalid multiplier ingredient",
         category="other",
         default_storage="pantry",
         shelf_life_days_unopened=10,
@@ -73,7 +73,7 @@ def test_open_shelf_life_multiplier_must_be_in_range(session, invalid_multiplier
 
 def test_frozen_shelf_life_days_must_be_positive_when_set(session):
     rule = ShelfLifeRule(
-        ingredient_name="Ingrediente congelado inválido",
+        ingredient_name="Invalid frozen ingredient",
         category="other",
         default_storage="pantry",
         shelf_life_days_unopened=10,
@@ -103,4 +103,4 @@ def test_pantry_items_relationship_starts_empty(milk_rule):
 
 
 def test_repr_contains_ingredient_name(milk_rule):
-    assert "Leche entera" in repr(milk_rule)
+    assert "Whole milk" in repr(milk_rule)

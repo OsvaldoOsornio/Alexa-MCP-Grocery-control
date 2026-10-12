@@ -1,4 +1,4 @@
-"""Esquemas Pydantic v2 (I/O de API) del inventario de cocina zero-waste."""
+"""Pydantic v2 schemas (API I/O) for the zero-waste kitchen inventory."""
 from .pantry_inventory import (
     PantryInventoryBase,
     PantryInventoryCreate,

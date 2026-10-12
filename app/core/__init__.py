@@ -1,1 +1,1 @@
-"""Configuración y utilidades transversales de la app."""
+"""App-wide configuration and shared utilities."""

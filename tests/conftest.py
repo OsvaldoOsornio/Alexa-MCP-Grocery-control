@@ -1,12 +1,12 @@
-"""Fixtures compartidas para la suite de tests de los modelos (Fase 1).
+"""Shared fixtures for the model test suite.
 
-Los tests corren contra SQLite en memoria por velocidad y portabilidad (no
-requieren un Postgres real). Esto cubre estructura, defaults, constraints y
-relaciones de los modelos SQLAlchemy. Lo que SQLite NO puede validar son los
-triggers de Postgres definidos en database/schema.sql (cálculo de
-`expiration_date`, ENUMs nativos) — eso se cubre en
-tests/test_integration_postgres.py, que se salta automáticamente si no hay
-una base de datos Postgres de prueba configurada (ver ese archivo).
+These tests run against in-memory SQLite for speed and portability; they do
+not need a real Postgres. That covers the structure, defaults, constraints
+and relationships of the SQLAlchemy models. What SQLite CANNOT validate are
+the Postgres triggers defined in database/schema.sql (the `expiration_date`
+calculation and the native ENUMs) - those are covered in
+tests/test_integration_postgres.py, which skips automatically when no test
+Postgres database is configured (see that file).
 """
 from __future__ import annotations
 
@@ -16,11 +16,11 @@ from sqlalchemy.orm import Session
 
 from app.models import Base, ShelfLifeRule
 
-# `users` no es un modelo ORM de esta app: en producción ya existe en
-# Postgres vía database/schema.sql (o el sistema de auth real). Para poder
-# ejercitar la FK completa `pantry_inventory.user_id -> users.id` en el
-# SQLite de los tests, se registra aquí un stub equivalente en el mismo
-# `MetaData` de Base.
+# `users` is not an ORM model of this app: in production it already exists
+# in Postgres via database/schema.sql (or the real auth system). To exercise
+# the full `pantry_inventory.user_id -> users.id` foreign key against the
+# tests' SQLite, an equivalent stub is registered here in the same `MetaData`
+# as Base.
 users_table = Table(
     "users",
     Base.metadata,
@@ -32,11 +32,11 @@ users_table = Table(
 
 @pytest.fixture()
 def engine():
-    """Motor SQLite en memoria con el esquema completo de `app.models`."""
+    """In-memory SQLite engine with the full `app.models` schema."""
     eng = create_engine("sqlite:///:memory:")
 
-    # SQLite trae las foreign keys desactivadas por defecto; sin esto, los
-    # tests de ON DELETE SET NULL / CASCADE no ejercitarían nada real.
+    # SQLite ships with foreign keys disabled; without this, the
+    # ON DELETE SET NULL / CASCADE tests would exercise nothing real.
     @event.listens_for(eng, "connect")
     def _enable_sqlite_fk(dbapi_connection, connection_record):  # noqa: ANN001
         cursor = dbapi_connection.cursor()
@@ -56,7 +56,7 @@ def session(engine):
 
 @pytest.fixture()
 def user_id(session) -> int:
-    """Inserta un usuario stub y devuelve su id, para usar como FK."""
+    """Insert a stub user and return its id, for use as a foreign key."""
     session.execute(users_table.insert().values(id=1, email="test@example.com"))
     session.commit()
     return 1
@@ -64,9 +64,9 @@ def user_id(session) -> int:
 
 @pytest.fixture()
 def milk_rule(session) -> ShelfLifeRule:
-    """Regla de caducidad de referencia (leche) reutilizada en varios tests."""
+    """Reference shelf-life rule (milk) reused across several tests."""
     rule = ShelfLifeRule(
-        ingredient_name="Leche entera",
+        ingredient_name="Whole milk",
         category="dairy",
         default_storage="refrigerator",
         shelf_life_days_unopened=10,

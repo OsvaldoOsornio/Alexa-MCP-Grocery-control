@@ -1,4 +1,4 @@
-"""Pruebas de integración HTTP para el protocolo MCP Streamable HTTP."""
+"""HTTP integration tests for the MCP Streamable HTTP protocol."""
 from __future__ import annotations
 
 import json
@@ -25,7 +25,7 @@ def _response_json(response: httpx.Response) -> dict[str, Any]:
         for line in response.text.splitlines()
         if line.startswith("data:")
     ]
-    assert data_lines, f"No se encontró un evento JSON-RPC en: {response.text!r}"
+    assert data_lines, f"No JSON-RPC event found in: {response.text!r}"
     return json.loads(data_lines[-1])
 
 
@@ -56,10 +56,9 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
     transport = httpx.ASGITransport(app=app)
 
     async with mcp.session_manager.run():
-        # El host debe ser uno de los permitidos por la protección anti DNS
-        # rebinding que el SDK activa automáticamente cuando el servidor
-        # escucha en 127.0.0.1 (ver app/core/config.py). "testserver" se
-        # rechazaría con 421.
+        # The host must be one allowed by the DNS rebinding protection the
+        # SDK enables automatically when the server listens on 127.0.0.1
+        # (see app/core/config.py). "testserver" would be rejected with 421.
         async with httpx.AsyncClient(
             transport=transport, base_url="http://127.0.0.1:8000"
         ) as client:
@@ -186,7 +185,7 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
                 "success": True,
                 "user_id": 17,
                 "count": 1,
-                "items": [{"id": 43, "display_name": "Leche"}],
+                "items": [{"id": 43, "display_name": "Milk"}],
             }
             receipt_mock = AsyncMock(return_value=receipt_result)
             monkeypatch.setattr(inventory, "ingest_receipt_items", receipt_mock)

@@ -1,4 +1,4 @@
-"""Tools MCP para consultar y modificar el estado del inventario."""
+"""MCP tools for reading and modifying the inventory state."""
 from __future__ import annotations
 
 from datetime import date
@@ -12,13 +12,13 @@ from app.services import inventory
 
 
 def register_inventory_tools(server: FastMCP) -> None:
-    """Registra las tools de inventario en el servidor MCP."""
+    """Register the inventory tools on the MCP server."""
 
     @server.tool()
     async def get_inventory_status(
         user_id: int, include_consumed: bool = False
     ) -> dict[str, Any]:
-        """Devuelve el inventario y su estado de caducidad calculado por PostgreSQL."""
+        """Return the inventory and the expiry status PostgreSQL calculated."""
         async with async_session_factory() as session:
             return await inventory.get_inventory_status(
                 session, user_id, include_consumed
@@ -33,7 +33,7 @@ def register_inventory_tools(server: FastMCP) -> None:
         storage_location: StorageLocation | None = None,
         is_consumed: bool | None = None,
     ) -> dict[str, Any]:
-        """Marca un artículo como abierto/consumido o cambia su ubicación."""
+        """Mark an item opened or consumed, or change where it is stored."""
         async with async_session_factory() as session:
             return await inventory.modify_item_state(
                 session,
@@ -51,7 +51,7 @@ def register_inventory_tools(server: FastMCP) -> None:
         image_base64: str,
         media_type: str = "image/jpeg",
     ) -> dict[str, Any]:
-        """Extrae artículos de un recibo en base64 y los agrega al inventario."""
+        """Extract items from a base64 receipt image and add them to the inventory."""
         async with async_session_factory() as session:
             return await inventory.ingest_receipt_items(
                 session, user_id, image_base64, media_type

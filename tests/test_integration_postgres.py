@@ -1,21 +1,21 @@
-"""Tests de integración contra un Postgres real (opcional, no corre en CI/local sin DB).
+"""Integration tests against a real Postgres (optional; skipped without a DB).
 
-Estos tests validan lo único que SQLite no puede: el trigger
-`calculate_pantry_expiration` y los ENUM nativos definidos en
-database/schema.sql. Se saltan automáticamente si no hay una base de datos de
-prueba configurada.
+These tests validate the one thing SQLite cannot: the
+`calculate_pantry_expiration` trigger and the native ENUMs defined in
+database/schema.sql. They skip automatically when no test database is
+configured.
 
-Cómo correrlos:
-    1. Crea una base de datos Postgres desechable para tests.
-    2. Aplica el esquema y el seed:
-         psql -d tu_base_test -f database/schema.sql
-         psql -d tu_base_test -f database/seed_shelf_life_rules.sql
-    3. Exporta la variable de entorno y corre pytest:
-         export TEST_DATABASE_URL="postgresql+psycopg://user:pass@localhost:5432/tu_base_test"
+How to run them:
+    1. Create a disposable Postgres database for tests.
+    2. Apply the schema and the seed:
+         psql -d your_test_db -f database/schema.sql
+         psql -d your_test_db -f database/seed_shelf_life_rules.sql
+    3. Export the environment variable and run pytest:
+         export TEST_DATABASE_URL="postgresql+psycopg://user:pass@localhost:5432/your_test_db"
          pytest tests/test_integration_postgres.py
 
-Estos tests solo LEEN y agregan/borran filas en `pantry_inventory`; no tocan
-el contenido semilla de `shelf_life_rules`.
+These tests only READ, and add or delete rows in `pantry_inventory`; they do
+not touch the seed contents of `shelf_life_rules`.
 """
 from __future__ import annotations
 
@@ -29,8 +29,8 @@ TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
     not TEST_DATABASE_URL,
     reason=(
-        "TEST_DATABASE_URL no está configurada: se omiten los tests de "
-        "integración contra Postgres real (ver docstring del módulo)."
+        "TEST_DATABASE_URL is not configured: skipping the integration "
+        "tests against a real Postgres (see the module docstring)."
     ),
 )
 
@@ -53,7 +53,7 @@ def pg_session():
 @pytest.fixture()
 def seeded_milk_rule(pg_session) -> "ShelfLifeRule":
     rule = pg_session.scalar(
-        select(ShelfLifeRule).where(ShelfLifeRule.ingredient_name == "Leche entera")
+        select(ShelfLifeRule).where(ShelfLifeRule.ingredient_name == "Whole milk")
     )
     assert rule is not None, (
         "Falta el seed: corre database/seed_shelf_life_rules.sql contra "
@@ -76,7 +76,7 @@ def test_trigger_sets_expiration_for_unopened_item(pg_session, test_user_id, see
     item = PantryInventory(
         user_id=test_user_id,
         shelf_life_rule_id=seeded_milk_rule.id,
-        display_name="Leche entera (test)",
+        display_name="Whole milk (test)",
         storage_location="refrigerator",
         purchase_date=date.today(),
     )
@@ -92,7 +92,7 @@ def test_trigger_recalculates_when_item_is_opened(pg_session, test_user_id, seed
     item = PantryInventory(
         user_id=test_user_id,
         shelf_life_rule_id=seeded_milk_rule.id,
-        display_name="Leche entera (test)",
+        display_name="Whole milk (test)",
         storage_location="refrigerator",
         purchase_date=date.today(),
     )
@@ -116,7 +116,7 @@ def test_custom_expiration_date_always_wins(pg_session, test_user_id, seeded_mil
     item = PantryInventory(
         user_id=test_user_id,
         shelf_life_rule_id=seeded_milk_rule.id,
-        display_name="Leche entera (test, fecha manual)",
+        display_name="Whole milk (test, manual date)",
         storage_location="refrigerator",
         custom_expiration_date=forced_date,
     )

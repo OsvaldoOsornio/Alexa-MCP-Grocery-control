@@ -1,4 +1,4 @@
-"""Engine y factory de sesiones async de SQLAlchemy."""
+"""SQLAlchemy async engine and session factory."""
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -15,6 +15,6 @@ async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    """Provee una sesión de DB por request/llamada de tool."""
+    """Provide one DB session per request or tool call."""
     async with async_session_factory() as session:
         yield session

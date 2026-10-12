@@ -1,1 +1,1 @@
-"""Herramientas (tools) MCP expuestas por el servidor."""
+"""MCP tools exposed by the server."""

@@ -1,8 +1,8 @@
-"""Enums compartidos entre los modelos SQLAlchemy y los esquemas Pydantic.
+"""Enums shared between the SQLAlchemy models and the Pydantic schemas.
 
-Los valores (en minúsculas) deben coincidir exactamente con los definidos en
-los tipos ENUM de PostgreSQL creados en database/schema.sql
-(`ingredient_category` y `storage_location`).
+The values (lower case) must match exactly the ones defined in the
+PostgreSQL ENUM types created in database/schema.sql
+(`ingredient_category` and `storage_location`).
 """
 from __future__ import annotations
 

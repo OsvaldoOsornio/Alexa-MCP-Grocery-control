@@ -1,36 +1,36 @@
 -- =============================================================================
--- Zero-Waste Kitchen Inventory — PostgreSQL Schema
+-- Zero-Waste Kitchen Inventory - PostgreSQL Schema
 -- =============================================================================
--- Tablas:
---   1. shelf_life_rules  -> catálogo maestro de caducidad por ingrediente
---   2. pantry_inventory  -> stock real de cada usuario, enlazado al catálogo
+-- Tables:
+--   1. shelf_life_rules  -> master expiry catalog, one row per ingredient
+--   2. pantry_inventory  -> each user's real stock, linked to the catalog
 --
--- Relación: pantry_inventory.shelf_life_rule_id  ->  shelf_life_rules.id  (N:1)
---           pantry_inventory.user_id             ->  users.id            (N:1)
+-- Relations: pantry_inventory.shelf_life_rule_id  ->  shelf_life_rules.id  (N:1)
+--            pantry_inventory.user_id             ->  users.id            (N:1)
 --
--- NOTA: `users` se incluye aquí como stub mínimo para que las FKs sean
--- válidas y el script sea ejecutable de forma autónoma. Si tu app ya tiene
--- una tabla de usuarios (Cognito/Auth0/Supabase/etc.), BORRA este bloque y
--- ajusta el tipo de `pantry_inventory.user_id` para que coincida con tu PK
--- real (p. ej. UUID en vez de BIGINT).
+-- NOTE: `users` is included here as a minimal stub so the foreign keys are
+-- valid and the script runs standalone. If your app already has a users table
+-- (Cognito/Auth0/Supabase/etc.), DELETE this block and change the type of
+-- `pantry_inventory.user_id` to match your real primary key (for example
+-- UUID instead of BIGINT).
 -- =============================================================================
 
 BEGIN;
 
 -- -----------------------------------------------------------------------------
--- 0. Tipos ENUM reutilizables
+-- 0. Reusable ENUM types
 -- -----------------------------------------------------------------------------
 DO $$ BEGIN
     CREATE TYPE ingredient_category AS ENUM (
-        'produce',            -- frutas y verduras frescas
-        'dairy',               -- lácteos y huevos
-        'meat_poultry',        -- carnes y aves
-        'seafood',             -- pescados y mariscos
-        'bakery',              -- panadería
-        'pantry_staple',       -- básicos de despensa (arroz, pasta, harina...)
-        'condiment_sauce',     -- aceites, salsas, condimentos
-        'beverage',            -- bebidas
-        'frozen',              -- productos ya congelados de fábrica
+        'produce',            -- fresh fruit and vegetables
+        'dairy',               -- dairy and eggs
+        'meat_poultry',        -- meat and poultry
+        'seafood',             -- fish and shellfish
+        'bakery',              -- bakery
+        'pantry_staple',       -- pantry staples (rice, pasta, flour...)
+        'condiment_sauce',     -- oils, sauces, condiments
+        'beverage',            -- drinks
+        'frozen',              -- products frozen at the factory
         'other'
     );
 EXCEPTION
@@ -48,7 +48,7 @@ EXCEPTION
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 0.1 Stub de usuarios (eliminar/ajustar si ya existe en tu sistema)
+-- 0.1 Users stub (delete or adjust if your system already has one)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -57,32 +57,33 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- -----------------------------------------------------------------------------
--- 1. shelf_life_rules — catálogo maestro de caducidad
+-- 1. shelf_life_rules - master expiry catalog
 -- -----------------------------------------------------------------------------
 CREATE TABLE shelf_life_rules (
     id                                    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-    -- Nombre canónico del ingrediente (español, en minúsculas por convención de la app)
+    -- Canonical ingredient name (the app's convention is lower case)
     ingredient_name                       VARCHAR(100) NOT NULL,
 
     category                              ingredient_category NOT NULL,
 
-    -- Dónde se guarda este ingrediente por defecto mientras está SIN abrir
+    -- Where this ingredient is stored by default while UNOPENED
     default_storage                       storage_location NOT NULL,
 
-    -- Días de vida útil desde la compra, SIN ABRIR, en `default_storage`
+    -- Shelf life in days from purchase, UNOPENED, in `default_storage`
     shelf_life_days_unopened              SMALLINT NOT NULL,
 
-    -- Multiplicador aplicado a `shelf_life_days_unopened` una vez ABIERTO.
-    -- Ej: 0.50 => una vez abierto, dura la mitad de días (desde la fecha de apertura).
-    -- 1.00 => abrirlo no acorta su vida útil (ej. azúcar, arroz seco).
+    -- Multiplier applied to `shelf_life_days_unopened` once OPENED.
+    -- e.g. 0.50 => once opened it lasts half as many days (from the opened date).
+    -- 1.00 => opening it does not shorten its life (e.g. sugar, dry rice).
     open_shelf_life_multiplier            NUMERIC(3, 2) NOT NULL DEFAULT 1.00,
 
-    -- Días de vida útil si se congela (NULL = congelar no es recomendable/aplicable)
+    -- Shelf life in days if frozen (NULL = freezing is not advisable/applicable)
     frozen_shelf_life_days                SMALLINT,
 
-    -- Si TRUE, una vez abierto debe refrigerarse aunque su almacenamiento
-    -- por defecto (unopened) sea la despensa (ej. mayonesa, aceite de oliva no, ketchup sí)
+    -- If TRUE, it must be refrigerated once opened even when its default
+    -- (unopened) storage is the pantry (e.g. mayonnaise and ketchup yes,
+    -- olive oil no)
     requires_refrigeration_after_opening  BOOLEAN NOT NULL DEFAULT FALSE,
 
     notes                                 TEXT,
@@ -100,12 +101,12 @@ CREATE TABLE shelf_life_rules (
 );
 
 COMMENT ON TABLE shelf_life_rules IS
-    'Catálogo maestro: días de caducidad por defecto por ingrediente, con multiplicador al abrir.';
+    'Master catalog: default shelf life in days per ingredient, with an opened multiplier.';
 
 CREATE INDEX ix_shelf_life_rules_category ON shelf_life_rules (category);
 
 -- -----------------------------------------------------------------------------
--- 2. pantry_inventory — stock actual del usuario
+-- 2. pantry_inventory - the user's current stock
 -- -----------------------------------------------------------------------------
 CREATE TABLE pantry_inventory (
     id                       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -113,17 +114,17 @@ CREATE TABLE pantry_inventory (
     user_id                  BIGINT NOT NULL
                                  REFERENCES users (id) ON DELETE CASCADE,
 
-    -- Referencia al catálogo. Puede ser NULL si el ingrediente no está
-    -- catalogado todavía (item "libre"); en ese caso, `custom_expiration_date`
-    -- es la única fuente de verdad para la caducidad.
+    -- Reference to the catalog. May be NULL when the ingredient is not
+    -- catalogued yet (a "free" item); in that case `custom_expiration_date`
+    -- is the only source of truth for the expiry.
     shelf_life_rule_id       BIGINT
                                  REFERENCES shelf_life_rules (id) ON DELETE SET NULL,
 
-    -- Nombre mostrado al usuario (puede incluir marca, ej. "Leche entera Alqueria")
+    -- Name shown to the user (may include a brand, e.g. "Alqueria whole milk")
     display_name             VARCHAR(150) NOT NULL,
 
     quantity                 NUMERIC(10, 2) NOT NULL DEFAULT 1,
-    unit                     VARCHAR(20)    NOT NULL DEFAULT 'unidad',
+    unit                     VARCHAR(20)    NOT NULL DEFAULT 'unit',
 
     storage_location         storage_location NOT NULL DEFAULT 'pantry',
 
@@ -131,12 +132,12 @@ CREATE TABLE pantry_inventory (
     purchase_date            DATE    NOT NULL DEFAULT CURRENT_DATE,
     opened_date              DATE,
 
-    -- Permite al usuario forzar una fecha exacta (ej. la impresa en el empaque),
-    -- que siempre tiene prioridad sobre el cálculo automático.
+    -- Lets the user force an exact date (e.g. the one printed on the pack),
+    -- which always takes priority over the automatic calculation.
     custom_expiration_date   DATE,
 
-    -- Calculado automáticamente por el trigger `trg_calc_pantry_expiration`
-    -- (ver más abajo). No se debe escribir manualmente salvo en migraciones.
+    -- Calculated automatically by the `trg_calc_pantry_expiration` trigger
+    -- (see below). Do not write it by hand except in migrations.
     expiration_date          DATE,
 
     is_consumed               BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -158,13 +159,13 @@ CREATE TABLE pantry_inventory (
 );
 
 COMMENT ON TABLE pantry_inventory IS
-    'Stock actual de despensa/refrigerador/congelador por usuario.';
+    'Current pantry/refrigerator/freezer stock per user.';
 
 CREATE INDEX ix_pantry_inventory_user_id ON pantry_inventory (user_id);
 CREATE INDEX ix_pantry_inventory_shelf_life_rule_id ON pantry_inventory (shelf_life_rule_id);
 
--- Índice parcial: la consulta más frecuente de una app zero-waste es
--- "qué tiene el usuario X que esté por vencer, sin contar lo ya consumido".
+-- Partial index: the most frequent query in a zero-waste app is
+-- "what does user X have that is about to expire, excluding what is consumed".
 CREATE INDEX ix_pantry_inventory_user_expiration_active
     ON pantry_inventory (user_id, expiration_date)
     WHERE is_consumed = FALSE;
@@ -173,7 +174,7 @@ CREATE INDEX ix_pantry_inventory_user_expiration_active
 -- 3. Triggers
 -- -----------------------------------------------------------------------------
 
--- 3.1 updated_at genérico, reutilizable en cualquier tabla con esa columna
+-- 3.1 Generic updated_at, reusable on any table with that column
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -192,18 +193,19 @@ CREATE TRIGGER trg_pantry_inventory_set_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
--- 3.2 Cálculo automático de expiration_date en pantry_inventory
+-- 3.2 Automatic calculation of expiration_date on pantry_inventory
 --
--- Prioridad:
---   1) custom_expiration_date, si el usuario la definió manualmente.
---   2) Si storage_location = 'freezer' y el catálogo define frozen_shelf_life_days:
+-- Priority:
+--   1) custom_expiration_date, if the user set it manually.
+--   2) If storage_location = 'freezer' and the catalog defines
+--      frozen_shelf_life_days:
 --        purchase_date + frozen_shelf_life_days
---   3) Si is_opened = TRUE (con opened_date):
+--   3) If is_opened = TRUE (with opened_date):
 --        opened_date + ROUND(shelf_life_days_unopened * open_shelf_life_multiplier)
---   4) En otro caso (sin abrir):
+--   4) Otherwise (unopened):
 --        purchase_date + shelf_life_days_unopened
---   5) Si no hay shelf_life_rule_id ni custom_expiration_date, no se puede
---      calcular: se conserva el valor previo (UPDATE) o queda NULL (INSERT).
+--   5) With neither shelf_life_rule_id nor custom_expiration_date it cannot
+--      be calculated: the previous value is kept (UPDATE) or left NULL (INSERT).
 CREATE OR REPLACE FUNCTION calculate_pantry_expiration()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -253,7 +255,7 @@ CREATE TRIGGER trg_pantry_inventory_calc_expiration
     EXECUTE FUNCTION calculate_pantry_expiration();
 
 -- -----------------------------------------------------------------------------
--- 4. Vista de conveniencia para el dashboard "zero-waste"
+-- 4. Convenience view for the "zero-waste" dashboard
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_pantry_inventory_status AS
 SELECT

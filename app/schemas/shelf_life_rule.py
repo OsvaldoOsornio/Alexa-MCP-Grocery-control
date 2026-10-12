@@ -1,4 +1,4 @@
-"""Esquemas Pydantic v2 para `shelf_life_rules`."""
+"""Pydantic v2 schemas for `shelf_life_rules`."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -10,11 +10,11 @@ from app.models.enums import IngredientCategory, StorageLocation
 
 
 class ShelfLifeRuleBase(BaseModel):
-    ingredient_name: str = Field(..., max_length=100, examples=["Leche entera"])
+    ingredient_name: str = Field(..., max_length=100, examples=["Whole milk"])
     category: IngredientCategory
     default_storage: StorageLocation
     shelf_life_days_unopened: int = Field(
-        ..., gt=0, le=3650, description="Días de vida útil sin abrir, desde la compra."
+        ..., gt=0, le=3650, description="Shelf life in days while unopened, counted from purchase."
     )
     open_shelf_life_multiplier: Decimal = Field(
         Decimal("1.00"),
@@ -23,7 +23,7 @@ class ShelfLifeRuleBase(BaseModel):
         description="Multiplicador sobre `shelf_life_days_unopened` una vez abierto.",
     )
     frozen_shelf_life_days: Optional[int] = Field(
-        None, gt=0, le=3650, description="Días de vida útil si se congela."
+        None, gt=0, le=3650, description="Shelf life in days if frozen."
     )
     requires_refrigeration_after_opening: bool = False
     notes: Optional[str] = None
@@ -34,7 +34,7 @@ class ShelfLifeRuleCreate(ShelfLifeRuleBase):
 
 
 class ShelfLifeRuleUpdate(BaseModel):
-    """Todos los campos opcionales: para PATCH parcial."""
+    """All fields optional: for a partial PATCH."""
 
     category: Optional[IngredientCategory] = None
     default_storage: Optional[StorageLocation] = None
@@ -53,9 +53,9 @@ class ShelfLifeRuleRead(ShelfLifeRuleBase):
     @computed_field  # type: ignore[misc]
     @property
     def estimated_opened_shelf_life_days(self) -> int:
-        """Vista previa de lo que calculará el trigger de Postgres al abrir el ítem.
+        """Preview of what the Postgres trigger will compute when the item is opened.
 
-        Espejo en Python de la lógica de `calculate_pantry_expiration()` en
-        database/schema.sql, útil para mostrarlo en UI antes de insertar.
+        A Python mirror of the `calculate_pantry_expiration()` logic in
+        database/schema.sql, useful for showing in the UI before inserting.
         """
         return max(1, round(self.shelf_life_days_unopened * float(self.open_shelf_life_multiplier)))

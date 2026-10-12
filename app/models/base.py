@@ -1,4 +1,4 @@
-"""Base declarativa y mixins compartidos por todos los modelos ORM."""
+"""Declarative base and mixins shared by every ORM model."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,17 +8,17 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    """Base declarativa de SQLAlchemy 2.0 para toda la app."""
+    """SQLAlchemy 2.0 declarative base for the whole app."""
 
 
 class TimestampMixin:
-    """Agrega `created_at` / `updated_at`.
+    """Adds `created_at` / `updated_at`.
 
-    `updated_at` también se mantiene vía trigger de Postgres
-    (`set_updated_at`, ver database/schema.sql) para que quede correcto
-    incluso si la fila se modifica fuera del ORM (SQL directo, otra app,
-    un job de mantenimiento, etc.). El `onupdate` aquí es solo una
-    conveniencia para sesiones puramente en memoria antes del flush.
+    `updated_at` is also maintained by a Postgres trigger (`set_updated_at`,
+    see database/schema.sql) so it stays correct even when the row is
+    modified outside the ORM (direct SQL, another app, a maintenance job,
+    and so on). The `onupdate` here is only a convenience for purely
+    in-memory sessions before the flush.
     """
 
     created_at: Mapped[datetime] = mapped_column(

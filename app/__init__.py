@@ -1,1 +1,1 @@
-"""Zero-Waste Sous-Chef: servidor MCP de gestión de despensa."""
+"""Zero-Waste Sous-Chef: MCP server for pantry management."""
