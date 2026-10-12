@@ -56,8 +56,12 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
     transport = httpx.ASGITransport(app=app)
 
     async with mcp.session_manager.run():
+        # El host debe ser uno de los permitidos por la protección anti DNS
+        # rebinding que el SDK activa automáticamente cuando el servidor
+        # escucha en 127.0.0.1 (ver app/core/config.py). "testserver" se
+        # rechazaría con 421.
         async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
+            transport=transport, base_url="http://127.0.0.1:8000"
         ) as client:
             initialized = await client.post(
                 "/mcp",
