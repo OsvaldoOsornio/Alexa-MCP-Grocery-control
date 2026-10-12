@@ -11,9 +11,10 @@ import pytest
 from mcp.shared.version import LATEST_PROTOCOL_VERSION
 
 from app.main import mcp
-from app.models import StorageLocation
-from app.services import inventory
+from app.models import RipenessModifier, StorageLocation
+from app.services import context, inventory, recipe
 from app.tools import inventory as inventory_tools
+from app.tools import recipe as recipe_tools
 
 
 def _response_json(response: httpx.Response) -> dict[str, Any]:
@@ -45,6 +46,7 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
     get_status_mock = AsyncMock(return_value=status_result)
     modify_state_mock = AsyncMock(return_value=modify_result)
     monkeypatch.setattr(inventory_tools, "async_session_factory", SessionContext)
+    monkeypatch.setattr(recipe_tools, "async_session_factory", SessionContext)
     monkeypatch.setattr(inventory, "get_inventory_status", get_status_mock)
     monkeypatch.setattr(inventory, "modify_item_state", modify_state_mock)
 
@@ -104,6 +106,8 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
                 "get_inventory_status",
                 "modify_item_state",
                 "ingest_receipt_items",
+                "update_pantry_context",
+                "generate_and_adapt_recipe",
             }
 
             status_schema = tools_by_name["get_inventory_status"]["inputSchema"]
@@ -120,6 +124,24 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
                 "refrigerator",
                 "freezer",
             ]
+
+            context_schema = tools_by_name["update_pantry_context"]["inputSchema"]
+            assert set(context_schema["required"]) == {
+                "user_id",
+                "item_name",
+                "modifier",
+            }
+            assert context_schema["$defs"]["RipenessModifier"]["enum"] == [
+                "very_ripe",
+                "ripe",
+                "underripe",
+                "smells_off",
+                "opened_long_ago",
+            ]
+
+            recipe_schema = tools_by_name["generate_and_adapt_recipe"]["inputSchema"]
+            assert recipe_schema["required"] == ["user_id"]
+            assert recipe_schema["properties"]["servings"]["default"] == 2
 
             receipt_schema = tools_by_name["ingest_receipt_items"]["inputSchema"]
             assert set(receipt_schema["required"]) == {"user_id", "image_base64"}
@@ -211,4 +233,66 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
             assert receipt_rpc_result["structuredContent"] == receipt_result
             receipt_mock.assert_awaited_once_with(
                 fake_session, 17, "ZmFrZS1pbWFnZQ==", "image/jpeg"
+            )
+
+            context_result = {"success": True, "item": {"id": 44}}
+            context_mock = AsyncMock(return_value=context_result)
+            monkeypatch.setattr(context, "update_pantry_context", context_mock)
+            context_call = await client.post(
+                "/mcp",
+                headers=session_headers,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 6,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "update_pantry_context",
+                        "arguments": {
+                            "user_id": 17,
+                            "item_name": "Avocados",
+                            "modifier": "very_ripe",
+                        },
+                    },
+                },
+            )
+            assert context_call.status_code == 200
+            context_rpc_result = _response_json(context_call)["result"]
+            assert not context_rpc_result.get("isError", False)
+            assert context_rpc_result["structuredContent"] == context_result
+            # The string on the wire must arrive as the enum member.
+            context_mock.assert_awaited_once_with(
+                fake_session, 17, "Avocados", RipenessModifier.VERY_RIPE
+            )
+
+            recipe_result = {"success": True, "adapted": True, "recipe": {"title": "X"}}
+            recipe_mock = AsyncMock(return_value=recipe_result)
+            monkeypatch.setattr(recipe, "generate_and_adapt_recipe", recipe_mock)
+            recipe_call = await client.post(
+                "/mcp",
+                headers=session_headers,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 7,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "generate_and_adapt_recipe",
+                        "arguments": {
+                            "user_id": 17,
+                            "servings": 4,
+                            "exclude_items": ["Cream"],
+                            "prior_recipe": "Carbonara",
+                        },
+                    },
+                },
+            )
+            assert recipe_call.status_code == 200
+            recipe_rpc_result = _response_json(recipe_call)["result"]
+            assert not recipe_rpc_result.get("isError", False)
+            assert recipe_rpc_result["structuredContent"] == recipe_result
+            recipe_mock.assert_awaited_once_with(
+                fake_session,
+                17,
+                servings=4,
+                exclude_items=["Cream"],
+                prior_recipe="Carbonara",
             )

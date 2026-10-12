@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 
 from app.core.config import get_settings
 from app.tools.inventory import register_inventory_tools
+from app.tools.recipe import register_recipe_tools
 
 settings = get_settings()
 
@@ -14,6 +15,7 @@ mcp = FastMCP(
     port=settings.mcp_server_port,
 )
 register_inventory_tools(mcp)
+register_recipe_tools(mcp)
 
 
 def main() -> None:

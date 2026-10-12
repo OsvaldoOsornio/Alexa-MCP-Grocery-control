@@ -26,3 +26,19 @@ class StorageLocation(str, enum.Enum):
     PANTRY = "pantry"
     REFRIGERATOR = "refrigerator"
     FREEZER = "freezer"
+
+
+class RipenessModifier(str, enum.Enum):
+    """Spoken context that overrides the catalog's shelf-life estimate.
+
+    Unlike the two enums above this one has no PostgreSQL counterpart: it is
+    an input vocabulary for `update_pantry_context`, not a stored column. The
+    values map to a number of days from today in
+    `app.services.context.RIPENESS_DAYS`.
+    """
+
+    VERY_RIPE = "very_ripe"
+    RIPE = "ripe"
+    UNDERRIPE = "underripe"
+    SMELLS_OFF = "smells_off"
+    OPENED_LONG_AGO = "opened_long_ago"

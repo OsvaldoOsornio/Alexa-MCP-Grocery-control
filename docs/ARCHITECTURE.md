@@ -24,8 +24,12 @@ The Next.js frontend is a parallel consumer of the same MCP server, not a layer 
 |---|---|
 | `app/main.py` | Builds the `FastMCP` instance from settings and runs it with `transport="streamable-http"` |
 | `app/core/config.py` | Pydantic settings from the environment or `.env` |
-| `app/tools/inventory.py` | Registers `get_inventory_status`, `modify_item_state`, `ingest_receipt_items` |
+| `app/tools/inventory.py` | Registers `get_inventory_status`, `modify_item_state`, `ingest_receipt_items`, `update_pantry_context` |
+| `app/tools/recipe.py` | Registers `generate_and_adapt_recipe` |
 | `app/services/inventory.py` | Inventory reads and writes, receipt parsing via Bedrock, catalog mapping |
+| `app/services/context.py` | Spoken shelf-life overrides via `custom_expiration_date` |
+| `app/services/recipe.py` | Recipe generation and adaptation over the live pantry |
+| `app/services/bedrock.py` | Shared Converse client, fence stripping and JSON validation |
 | `app/db/session.py` | Async engine and session factory |
 | `app/models/` | `ShelfLifeRule`, `PantryInventory`, shared enums, timestamp mixin |
 | `app/schemas/` | Create/update/read schemas for both tables |
@@ -114,6 +118,35 @@ The tool matches `ingredient_name` against the names in `shelf_life_rules`. On a
 
 The response carries `success`, `user_id`, `count` and `items`, where each item has `id`, `display_name`, `quantity`, `unit`, `shelf_life_rule_id`, `storage_location` and `expiration_date`. Extraction requires AWS credentials available to boto3 and permission to invoke the Bedrock model in `AWS_REGION`.
 
+### `update_pantry_context`
+
+```json
+{"user_id": 17, "item_name": "Avocados", "modifier": "very_ripe"}
+```
+
+All three arguments are required. `modifier` is a closed set emitted as a JSON-Schema enum, so an invalid value is rejected by the protocol layer before any database work: `very_ripe` (1 day), `ripe` (3 days), `underripe` (extends by 3 days), `smells_off` (today, flagged for disposal) and `opened_long_ago` (1 day).
+
+`item_name` is matched case-insensitively against both `display_name` and the catalog `ingredient_name`, newest purchase first, excluding consumed items. An exact display-name match wins outright. Otherwise an ambiguous match writes nothing and returns `success: false` with a `candidates` list, so a conversational client can ask a follow-up question rather than guess.
+
+The write goes to `custom_expiration_date`, which the trigger honours above every other branch. The response reports both `previous_expiration_date` and the new `expiration_date` so the caller can narrate the change.
+
+### `generate_and_adapt_recipe`
+
+```json
+{
+  "user_id": 17,
+  "servings": 2,
+  "exclude_items": ["Cream"],
+  "prior_recipe": "Carbonara"
+}
+```
+
+Only `user_id` is required. `servings` defaults to 2 and must be 1-12.
+
+With no `prior_recipe` the tool generates; with one it adapts, keeping the dish recognisable and changing only what the exclusions force. Items are filtered to statuses `fresh`, `expiring_soon` and `unknown` -- `expired` is deliberately excluded, because the product exists to prevent waste rather than to recommend eating spoiled food.
+
+The response carries `recipe` (title, servings, total_minutes, uses_expiring, ingredients, steps, missing) plus `expiring_soon_in_pantry`, which is derived from the inventory rather than from the model's answer. A client can compare the two and say so when they diverge.
+
 ## Bedrock integration notes
 
 Three behaviours of the Converse API shaped this code and are worth knowing before changing it.
@@ -154,6 +187,6 @@ The class derives directly from `status`. A `null` `expiration_date` is never tu
 
 The server does not authenticate clients. `user_id` arrives in the payload and scopes the query, but proves nothing about the caller's identity.
 
-Generic item intake from free text and recipe generation are not implemented yet; `ingest_receipt_items` only covers receipt photos.
+Generic item intake from free text is not implemented; `ingest_receipt_items` only covers receipt photos.
 
 The frontend uses `user_id: 1` as a demo user. Configure `MCP_URL` in the Next server environment, never as a public `NEXT_PUBLIC_*` variable.

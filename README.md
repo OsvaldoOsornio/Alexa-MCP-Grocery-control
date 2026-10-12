@@ -2,7 +2,7 @@
 
 **An Alexa+ kitchen agent that knows what is about to go bad — and tells you what to cook with it.**
 
-Built for the Build, Ship, Shape: Amazon Developer Hackathon, **Alexa+ track**, using a self-hosted **MCP server** that implements specification **2025-11-25 over Streamable HTTP**, with **Amazon Bedrock** for multimodal receipt extraction.
+Built for the Build, Ship, Shape: Amazon Developer Hackathon, **Alexa+ track**, using a self-hosted **MCP server** that implements specification **2025-11-25 over Streamable HTTP**, with **Amazon Bedrock** for multimodal receipt extraction and adaptive recipe reasoning.
 
 Nobody decides to throw food away. You cannot see the back of your own fridge, you do not remember which day you opened the yogurt, and the moment you decide what to cook is never the moment you think about what is expiring. Eat Me First closes that gap: photograph a receipt, and the pantry ages itself from then on.
 
@@ -22,12 +22,18 @@ Because the pantry lives in PostgreSQL rather than in a chat transcript, **Alexa
 | `get_inventory_status` | Read rows from `v_pantry_inventory_status` | `user_id`, optional `include_consumed` |
 | `modify_item_state` | Mark opened or consumed, or change location | `user_id`, `item_id`, `is_opened`, `opened_date`, `storage_location`, `is_consumed` |
 | `ingest_receipt_items` | Extract products from a photo and insert them | `user_id`, `image_base64`, optional `media_type` |
+| `update_pantry_context` | Adjust shelf life from spoken observation | `user_id`, `item_name`, `modifier` |
+| `generate_and_adapt_recipe` | Build or re-plan a recipe around what expires soonest | `user_id`, `servings`, `exclude_items`, `prior_recipe` |
+
+Two of these make it an agent rather than a CRUD wrapper. `update_pantry_context` takes what a person says out loud -- "the avocados are very ripe" -- and rewrites the item's shelf life. `generate_and_adapt_recipe` reads the pantry ordered by urgency and asks Bedrock for a dish built around it, then re-plans mid-cook when an ingredient runs out.
 
 ## How it uses Amazon Bedrock
 
 `ingest_receipt_items` sends the receipt image to **Amazon Bedrock** through the **Converse API** with Claude 3.5 Sonnet, using `boto3`. The reply is parsed as strict JSON and validated by a Pydantic model with `extra="forbid"` before anything reaches the database. Extracted ingredients are matched against the `shelf_life_rules` catalog; unmatched items are stored as free items in the pantry.
 
 The receipt never decides the expiry date. PostgreSQL does.
+
+`generate_and_adapt_recipe` is the second **Amazon Bedrock** call, and a different kind of call. The first extracts; this one reasons. It receives the inventory ordered by `days_remaining` and must build a dish from it, constrained to pantry items plus a short list of assumed staples -- anything else it wants is reported in a `missing` field rather than silently invented. Passing a `prior_recipe` together with `exclude_items` switches it from generate to adapt, which is how a mid-cook re-plan happens in one round trip.
 
 ## Architecture
 
@@ -36,7 +42,7 @@ flowchart LR
 	U[Person] --> UI[Next.js React UI]
 	UI --> RP[Next.js Route Handler /api/mcp]
 	RP --> MCP[FastMCP · Streamable HTTP · 2025-11-25]
-	MCP --> TOOLS[Inventory tools]
+	MCP --> TOOLS[Five MCP tools]
 	TOOLS --> SVC[Python services]
 	SVC --> ORM[SQLAlchemy async]
 	ORM --> PG[(PostgreSQL)]

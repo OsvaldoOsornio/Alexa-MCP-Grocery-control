@@ -184,9 +184,7 @@ def test_ingest_receipt_items_uses_bedrock_and_inserts_catalogued_models(monkeyp
 
     bedrock_client = FakeBedrockClient()
     monkeypatch.setattr(
-        inventory_service.boto3,
-        "client",
-        lambda service_name, region_name: bedrock_client,
+        inventory_service.bedrock, "get_client", lambda: bedrock_client
     )
     milk_rule = SimpleNamespace(
         id=8,

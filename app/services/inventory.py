@@ -10,7 +10,6 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-import boto3
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -18,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.core.config import get_settings
 from app.models import PantryInventory, ShelfLifeRule, StorageLocation
 from app.schemas import PantryInventoryCreate
+from app.services import bedrock
 
 MAX_RECEIPT_IMAGE_BYTES = 5 * 1024 * 1024
 IMAGE_FORMATS = {
@@ -55,7 +55,7 @@ def _extract_receipt_items_from_bedrock(
     image_bytes: bytes, image_format: str, catalog_names: list[str]
 ) -> list[ReceiptLineItem]:
     settings = get_settings()
-    client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
+    client = bedrock.get_client()
     catalog = json.dumps(catalog_names, ensure_ascii=False)
     response = client.converse(
         modelId=settings.bedrock_model_id,
@@ -87,22 +87,7 @@ def _extract_receipt_items_from_bedrock(
         ],
         inferenceConfig={"maxTokens": 2048, "temperature": 0},
     )
-    content = response.get("output", {}).get("message", {}).get("content", [])
-    response_text = "\n".join(
-        block["text"] for block in content if isinstance(block.get("text"), str)
-    ).strip()
-    if response_text.startswith("```") and response_text.endswith("```"):
-        response_text = response_text[3:-3].strip()
-        if response_text.startswith("json"):
-            response_text = response_text[4:].strip()
-    if not response_text:
-        raise ValueError("Bedrock returned no JSON content with items.")
-
-    try:
-        payload = json.loads(response_text)
-        extraction = ReceiptExtraction.model_validate(payload)
-    except (json.JSONDecodeError, ValueError) as error:
-        raise ValueError("Bedrock returned invalid receipt JSON.") from error
+    extraction = bedrock.parse_json_response(response, ReceiptExtraction, "receipt")
     return extraction.items
 
 

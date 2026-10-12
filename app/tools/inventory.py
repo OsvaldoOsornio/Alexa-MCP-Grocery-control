@@ -7,8 +7,8 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from app.db.session import async_session_factory
-from app.models import StorageLocation
-from app.services import inventory
+from app.models import RipenessModifier, StorageLocation
+from app.services import context, inventory
 
 
 def register_inventory_tools(server: FastMCP) -> None:
@@ -43,6 +43,18 @@ def register_inventory_tools(server: FastMCP) -> None:
                 opened_date=opened_date,
                 storage_location=storage_location,
                 is_consumed=is_consumed,
+            )
+
+    @server.tool()
+    async def update_pantry_context(
+        user_id: int,
+        item_name: str,
+        modifier: RipenessModifier,
+    ) -> dict[str, Any]:
+        """Adjust an item's shelf life from what the user observed out loud."""
+        async with async_session_factory() as session:
+            return await context.update_pantry_context(
+                session, user_id, item_name, modifier
             )
 
     @server.tool()

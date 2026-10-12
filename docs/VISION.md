@@ -21,8 +21,8 @@ The moment that decides whether food gets eaten or thrown away is the moment som
 | Read the pantry and its expiry status | `get_inventory_status` | **Built** |
 | Mark opened, consumed, or moved | `modify_item_state` | **Built** |
 | Receipt photo to inventory, via Bedrock | `ingest_receipt_items` | **Built** |
-| Voice context that changes shelf life | `update_pantry_context` | Planned |
-| Generate and adapt a recipe | `generate_and_adapt_recipe` | Planned |
+| Voice context that changes shelf life | `update_pantry_context` | **Built** |
+| Generate and adapt a recipe | `generate_and_adapt_recipe` | **Built** |
 | Amazon Fresh order sync | `sync_amazon_fresh_delivery` | Not scheduled |
 
 ### Voice context
