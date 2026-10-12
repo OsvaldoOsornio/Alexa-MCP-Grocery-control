@@ -1,11 +1,11 @@
-# Esquema de base de datos — Inventario de cocina zero-waste
+# Database schema — zero-waste kitchen inventory
 
-## Diagrama entidad-relación
+## Entity relationship diagram
 
 ```mermaid
 erDiagram
-    USERS ||--o{ PANTRY_INVENTORY : "posee"
-    SHELF_LIFE_RULES ||--o{ PANTRY_INVENTORY : "cataloga"
+    USERS ||--o{ PANTRY_INVENTORY : "owns"
+    SHELF_LIFE_RULES ||--o{ PANTRY_INVENTORY : "catalogs"
 
     USERS {
         bigint id PK
@@ -35,35 +35,35 @@ erDiagram
         date purchase_date
         date opened_date
         date custom_expiration_date
-        date expiration_date "calculado por trigger"
+        date expiration_date "computed by trigger"
         boolean is_consumed
     }
 ```
 
-## Relaciones
+## Relationships
 
-- **`pantry_inventory.user_id` → `users.id`** (`ON DELETE CASCADE`): si se borra un usuario, se borra su inventario.
-- **`pantry_inventory.shelf_life_rule_id` → `shelf_life_rules.id`** (`ON DELETE SET NULL`): el catálogo es la fuente de la regla de caducidad, pero borrar una regla no debe borrar el stock del usuario; simplemente el ítem queda "sin catalogar" y depende de `custom_expiration_date`.
+- **`pantry_inventory.user_id` → `users.id`** (`ON DELETE CASCADE`): deleting a user deletes their inventory.
+- **`pantry_inventory.shelf_life_rule_id` → `shelf_life_rules.id`** (`ON DELETE SET NULL`): the catalog is the source of the expiry rule, but deleting a rule must not delete the user's stock. The item simply becomes uncatalogued and depends on `custom_expiration_date`.
 
-Es una relación clásica **catálogo (1) — inventario (N)**: `shelf_life_rules` es de solo lectura/administración (semilla + mantenimiento), `pantry_inventory` es transaccional (crece con cada compra del usuario).
+This is a classic **catalog (1) — inventory (N)** relationship. `shelf_life_rules` is read-mostly, maintained by seed and administration; `pantry_inventory` is transactional and grows with every shop.
 
-## Lógica de caducidad (trigger `calculate_pantry_expiration`)
+## Expiry logic (the `calculate_pantry_expiration` trigger)
 
-Orden de prioridad al calcular `expiration_date`:
+Priority order when computing `expiration_date`:
 
-1. `custom_expiration_date` (el usuario la fijó manualmente, p. ej. la fecha impresa en el empaque) → siempre gana.
-2. Si está en `freezer` y la regla define `frozen_shelf_life_days` → `purchase_date + frozen_shelf_life_days`.
-3. Si `is_opened = TRUE` → `opened_date + ROUND(shelf_life_days_unopened * open_shelf_life_multiplier)`.
-4. Si no → `purchase_date + shelf_life_days_unopened`.
-5. Sin regla ni fecha manual → no se puede calcular (`NULL` en insert, se conserva el valor previo en update).
+1. `custom_expiration_date`, when the user set it manually (for example the date printed on the pack) — always wins.
+2. In the `freezer`, when the rule defines `frozen_shelf_life_days` → `purchase_date + frozen_shelf_life_days`.
+3. When `is_opened = TRUE` → `opened_date + ROUND(shelf_life_days_unopened * open_shelf_life_multiplier)`.
+4. Otherwise → `purchase_date + shelf_life_days_unopened`.
+5. With neither a rule nor a manual date, it cannot be computed: `NULL` on insert, previous value kept on update.
 
-Esto se recalcula automáticamente en cada `INSERT`/`UPDATE` de `pantry_inventory` (por ejemplo, al marcar `is_opened = TRUE`), así que la app nunca tiene que replicar esta lógica de fechas en el backend — solo leerla.
+This recalculates automatically on every `INSERT` and `UPDATE` of `pantry_inventory` — for example when `is_opened` is set to `TRUE` — so the application never replicates this date logic. It only reads the result.
 
-## Orden de ejecución
+## Execution order
 
 ```bash
-psql -d tu_base -f database/schema.sql
-psql -d tu_base -f database/seed_shelf_life_rules.sql
+psql -d your_db -f database/schema.sql
+psql -d your_db -f database/seed_shelf_life_rules.sql
 ```
 
-> **Nota sobre `users`:** la tabla incluida en `schema.sql` es un *stub* mínimo para que las FKs sean válidas de forma autónoma. Si tu proyecto ya tiene autenticación (Cognito, Supabase, Auth0, etc.), elimina ese bloque y ajusta el tipo de `pantry_inventory.user_id` para que coincida con tu PK real (p. ej. `UUID`).
+> **Note on `users`:** the table in `schema.sql` is a minimal stub so the foreign keys are valid standalone. If your project already has authentication (Cognito, Supabase, Auth0, and so on), delete that block and change the type of `pantry_inventory.user_id` to match your real primary key, for example `UUID`.

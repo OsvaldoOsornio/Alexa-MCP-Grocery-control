@@ -1,72 +1,79 @@
-# Despensa Viva
+# Eat Me First
 
-Inventario de cocina zero-waste con un frontend React/Next.js, un servidor MCP por Streamable HTTP y extracción de productos de recibos con Amazon Bedrock.
+**An Alexa+ kitchen agent that knows what is about to go bad — and tells you what to cook with it.**
 
-Despensa Viva conecta eventos cotidianos (comprar, abrir, mover o consumir un alimento) con un inventario cuyo semáforo usa las fechas calculadas por PostgreSQL. El frontend mantiene un modo demo interactivo cuando el backend no está disponible.
+Built for the Build, Ship, Shape: Amazon Developer Hackathon, **Alexa+ track**, using a self-hosted **MCP server** that implements specification **2025-11-25 over Streamable HTTP**, with **Amazon Bedrock** for multimodal receipt extraction.
 
-## Qué incluye
+Nobody decides to throw food away. You cannot see the back of your own fridge, you do not remember which day you opened the yogurt, and the moment you decide what to cook is never the moment you think about what is expiring. Eat Me First closes that gap: photograph a receipt, and the pantry ages itself from then on.
 
-- **Interfaz de cocina responsive** con simulador de eventos, filtros, búsqueda y estados legibles por color y etiqueta.
-- **Servidor MCP** compatible con la revisión `2025-11-25`, usando Streamable HTTP.
-- **Tres tools MCP**: consulta de inventario, modificación de estado e ingestión de fotos de recibos.
-- **Extracción asistida por IA**: boto3 invoca Amazon Bedrock Converse con Claude 3.5 Sonnet al procesar una foto.
-- **Caducidad coherente**: PostgreSQL calcula `expiration_date` con un trigger; el frontend no replica esa lógica.
-- **Modo demo** con datos tipados y eventos locales si no hay conexión MCP.
-- **Pruebas** de backend, protocolo MCP y componente de semáforo con React Testing Library.
+## How it uses Alexa+
 
-## Arquitectura
+Everything the product does runs through a self-hosted **MCP server** that **Alexa+** connects to. This is not a REST API with an MCP label on it:
+
+- The server negotiates a real protocol session and issues an `Mcp-Session-Id` header.
+- It advertises JSON-Schema-typed tools through `tools/list`.
+- It returns `structuredContent` from `tools/call`.
+- It speaks **MCP specification 2025-11-25** over **Streamable HTTP**, verified against a live server.
+
+Because the pantry lives in PostgreSQL rather than in a chat transcript, **Alexa+** gets state that persists across sessions.
+
+| Tool | Purpose | Key arguments |
+|---|---|---|
+| `get_inventory_status` | Read rows from `v_pantry_inventory_status` | `user_id`, optional `include_consumed` |
+| `modify_item_state` | Mark opened or consumed, or change location | `user_id`, `item_id`, `is_opened`, `opened_date`, `storage_location`, `is_consumed` |
+| `ingest_receipt_items` | Extract products from a photo and insert them | `user_id`, `image_base64`, optional `media_type` |
+
+## How it uses Amazon Bedrock
+
+`ingest_receipt_items` sends the receipt image to **Amazon Bedrock** through the **Converse API** with Claude 3.5 Sonnet, using `boto3`. The reply is parsed as strict JSON and validated by a Pydantic model with `extra="forbid"` before anything reaches the database. Extracted ingredients are matched against the `shelf_life_rules` catalog; unmatched items are stored as free items in the pantry.
+
+The receipt never decides the expiry date. PostgreSQL does.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-	U[Persona usuaria] --> UI[Next.js · React UI]
+	U[Person] --> UI[Next.js React UI]
 	UI --> RP[Next.js Route Handler /api/mcp]
-	RP --> MCP[FastMCP · Streamable HTTP]
-	MCP --> TOOLS[Tools de inventario]
-	TOOLS --> SVC[Servicios Python]
+	RP --> MCP[FastMCP · Streamable HTTP · 2025-11-25]
+	MCP --> TOOLS[Inventory tools]
+	TOOLS --> SVC[Python services]
 	SVC --> ORM[SQLAlchemy async]
 	ORM --> PG[(PostgreSQL)]
-	PG --> TR[Vista de estado y trigger de caducidad]
+	PG --> TR[Status view and expiry trigger]
 	SVC --> BOTO[boto3 · Converse]
 	BOTO --> BEDROCK[Amazon Bedrock · Claude 3.5 Sonnet]
 	BEDROCK --> SVC
 ```
 
-El navegador no se conecta directamente a PostgreSQL, AWS ni al endpoint MCP: solicita operaciones al Route Handler de Next, que negocia una sesión MCP server-to-server. Bedrock solo participa en `ingest_receipt_items`; la lectura y modificación del inventario pasan por SQLAlchemy.
+The browser never connects directly to PostgreSQL, AWS or the MCP endpoint. It asks the Next.js Route Handler, which negotiates a server-to-server MCP session.
 
-## Tools MCP
+**Expiry is owned by the database.** A trigger computes `expiration_date` on every insert and update, in this priority order: a user-set `custom_expiration_date`; the frozen shelf life when the item is in the freezer; the opened date times the opened multiplier; otherwise purchase date plus unopened shelf life. The UI and the agent read that result and never recompute it, so they cannot disagree.
 
-| Tool | Uso | Argumentos principales |
-|---|---|---|
-| `get_inventory_status` | Obtiene filas de `v_pantry_inventory_status` | `user_id`, `include_consumed` opcional |
-| `modify_item_state` | Marca abierto/consumido o cambia ubicación | `user_id`, `item_id`, `is_opened`, `opened_date`, `storage_location`, `is_consumed` |
-| `ingest_receipt_items` | Extrae productos de una foto y los inserta | `user_id`, `image_base64`, `media_type` opcional |
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module-level detail and the full tool payload contracts.
 
-La tool de recibos acepta Base64 puro (sin prefijo `data:`), imágenes JPEG/PNG/GIF/WebP y hasta 5 MB. Los productos se asocian a `shelf_life_rules` cuando hay coincidencia; los artículos libres usan ubicación `pantry`. Consulta [HANDOFF_FASE_3.md](HANDOFF_FASE_3.md) para los payloads y respuestas MCP completos.
+## Requirements
 
-## Requisitos
+- Python 3.10 or later
+- Node.js 24 LTS and npm
+- PostgreSQL, locally or via `DATABASE_URL`
+- AWS credentials with Amazon Bedrock model access, to process real receipts
 
-- Python 3.10 o superior.
-- Node.js 24 LTS y npm.
-- PostgreSQL disponible localmente o mediante `DATABASE_URL`.
-- Credenciales AWS y acceso al modelo de Amazon Bedrock para procesar recibos reales.
+## Run it locally
 
-## Inicio local
-
-### 1. Preparar PostgreSQL
-
-Crea la base de datos y aplica el esquema y catálogo inicial:
+### 1. Prepare PostgreSQL
 
 ```powershell
-createdb zero_waste_sous_chef
-psql -d zero_waste_sous_chef -f database/schema.sql
-psql -d zero_waste_sous_chef -f database/seed_shelf_life_rules.sql
+createdb eat_me_first
+psql -d eat_me_first -f database/schema.sql
+psql -d eat_me_first -f database/seed_shelf_life_rules.sql
 ```
 
-`database/schema.sql` es la fuente de verdad de ENUMs, tablas, vista y trigger. No sustituyas el trigger calculando `expiration_date` en Python o en React.
+`database/schema.sql` is the source of truth for the ENUMs, tables, view and trigger. Do not replace the trigger by computing `expiration_date` in Python or React.
 
-### 2. Configurar y arrancar el backend MCP
+### 2. Start the MCP server
 
-Desde la raíz del repositorio:
+From the repository root:
 
 ```powershell
 python -m venv .venv
@@ -76,23 +83,21 @@ Copy-Item .env.example .env
 python -m app.main
 ```
 
-Edita `.env` si PostgreSQL, región/modelo de Bedrock o puerto MCP difieren de los valores locales. Por defecto el servidor escucha en `http://localhost:8000/mcp`.
+The server listens on `http://127.0.0.1:8000/mcp` by default.
 
-Variables principales:
-
-| Variable | Propósito |
+| Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Conexión SQLAlchemy async; usa `postgresql+asyncpg://...` |
-| `AWS_REGION` | Región de Bedrock |
-| `BEDROCK_MODEL_ID` | Modelo de extracción; por defecto Claude 3.5 Sonnet |
-| `MCP_SERVER_HOST`, `MCP_SERVER_PORT` | Host y puerto de Streamable HTTP |
-| `MCP_SERVER_NAME` | Nombre anunciado por FastMCP |
+| `DATABASE_URL` | Async SQLAlchemy connection; use `postgresql+asyncpg://...` |
+| `AWS_REGION` | Bedrock region |
+| `BEDROCK_MODEL_ID` | Extraction model; Claude 3.5 Sonnet by default |
+| `MCP_SERVER_HOST`, `MCP_SERVER_PORT` | Streamable HTTP host and port |
+| `MCP_SERVER_NAME` | Name announced by FastMCP |
 
-AWS usa la cadena de credenciales estándar de boto3 (por ejemplo, perfil local o rol de ejecución). No guardes claves en el repositorio.
+AWS uses the standard boto3 credential chain, for example a local profile or an execution role. Never put keys in the repository.
 
-### 3. Arrancar el frontend
+### 3. Start the frontend
 
-En otra terminal:
+In another terminal:
 
 ```powershell
 Set-Location frontend
@@ -101,62 +106,58 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Abre `http://localhost:3000`. `frontend/.env.example` define `MCP_URL=http://127.0.0.1:8000/mcp`; cambia ese valor en `.env.local` si el backend está en otro host. El frontend también puede ejecutarse sin backend: mostrará datos y eventos demo, claramente etiquetados como locales.
+Open `http://localhost:3000`. The frontend also runs without a backend, showing clearly labelled demo data.
 
-## Tests y build
-
-### Backend Python
+## Tests
 
 ```powershell
 python -m pytest -q
 ```
 
-Los tests de modelos y servicios no requieren AWS. Los tests del trigger PostgreSQL se omiten si no se configura `TEST_DATABASE_URL`; para habilitarlos instala además `psycopg` y apunta esa variable a una base de prueba desechable con el esquema y seed aplicados.
+Model, service and MCP protocol tests need neither AWS nor PostgreSQL. The PostgreSQL trigger tests skip unless `TEST_DATABASE_URL` points at a disposable test database with the schema and seed applied; install `psycopg` to enable them.
 
-### Frontend
-
-Desde `frontend/`:
+From `frontend/`:
 
 ```powershell
 npm run lint
 npm test
 npm run build
-npm start
 ```
 
-`npm test` usa Vitest, JSDOM y React Testing Library. `tests/status-pill.test.tsx` comprueba las cinco clases de estado y la transición de `fresh` a `expired`. El build de producción se sirve con `npm start` después de `npm run build`.
+## Inventory traffic light
 
-## Semáforo de inventario
-
-| Estado MCP | Clase visual | Significado |
+| MCP status | CSS class | Meaning |
 |---|---|---|
-| `fresh` | `status-fresh` | En buen estado |
-| `expiring_soon` | `status-expiring_soon` | Por vencer pronto |
-| `expired` | `status-expired` | Vencido |
-| `consumed` | `status-consumed` | Consumido |
-| `unknown` | `status-unknown` | Sin fecha calculable |
+| `fresh` | `status-fresh` | In good condition |
+| `expiring_soon` | `status-expiring_soon` | Expiring shortly |
+| `expired` | `status-expired` | Past its date |
+| `consumed` | `status-consumed` | Consumed |
+| `unknown` | `status-unknown` | No computable date |
 
-`quantity` llega como decimal serializado en texto; fechas como ISO 8601. Si `expiration_date` es `null`, la UI presenta el estado `unknown`, no una fecha estimada.
+`quantity` arrives as a decimal serialized to text, dates as ISO 8601. When `expiration_date` is `null` the UI shows `unknown` rather than inventing an estimate.
 
-## Seguridad y límites conocidos
+## Security and known limits
 
-- El backend no autentica al llamante. `user_id` es un argumento de tool (el frontend usa `1` como demo), no una identidad verificada. No expongas el servidor a redes no confiables sin añadir autenticación y autorización.
-- `MCP_SERVER_HOST=0.0.0.0` puede escuchar en interfaces externas. Limita el acceso con firewall o cambia el host a `127.0.0.1` durante desarrollo local.
-- El procesamiento real de recibos requiere permisos de Bedrock y puede generar costes AWS. El modo demo no llama a Bedrock ni persiste datos.
-- La base de datos incluye un stub `users`; ajusta su clave y las relaciones antes de integrar un proveedor de identidad real.
-- Este repositorio no contiene todavía un archivo `LICENSE`. Antes de distribuirlo como proyecto Open Source, el equipo debe elegir y añadir una licencia explícita.
+- **The MCP server does not authenticate callers.** `user_id` is a tool argument, not a verified identity. Do not expose this server to an untrusted network without adding authentication and authorization.
+- The server binds to `127.0.0.1` by default. The MCP SDK automatically enables DNS rebinding protection for loopback hosts, so Host headers other than `127.0.0.1`, `localhost` and `[::1]` are rejected with HTTP 421. Changing the bind address to `0.0.0.0` silently disables that protection.
+- Processing real receipts requires Bedrock permissions and can incur AWS costs. Demo mode calls neither Bedrock nor the database.
+- Receipt text flows into a Bedrock prompt. The blast radius is limited: the response model forbids extra fields and caps lengths, and `ingredient_name` is matched against the catalog rather than trusted.
+- The database ships a `users` stub. Adjust its key and the relationships before integrating a real identity provider.
+- `npm audit` reports advisories in development-only dependencies of `eslint-config-next`. They do not reach the production bundle, and `npm audit fix --force` breaks the Next 16 setup.
 
-## Contribuir
+## License
 
-1. Abre un issue para describir el cambio o el problema.
-2. Envía un pull request pequeño con pruebas y documentación actualizada.
-3. Ejecuta los checks del área afectada: `pytest -q` para Python; `npm run lint`, `npm test` y `npm run build` para el frontend.
-4. No incluyas `.env`, credenciales, datos personales ni recibos reales en commits o fixtures.
+MIT. See [LICENSE](LICENSE).
 
-## Documentación del proyecto
+## Contributing
 
-- [HANDOFF_FASE_1.md](HANDOFF_FASE_1.md): modelos, esquema y reglas de expiración.
-- [HANDOFF_FASE_2.md](HANDOFF_FASE_2.md): transporte MCP y contratos de tools.
-- [HANDOFF_FASE_3.md](HANDOFF_FASE_3.md): estructura de datos para frontend y recibos.
-- [HANDOFF_FASE_4.md](HANDOFF_FASE_4.md): pruebas del semáforo y arquitectura frontend.
-- [GUION_TECNICO_VIDEO.md](GUION_TECNICO_VIDEO.md): guion de demo de 2:30 minutos.
+1. Open an issue describing the change or the problem.
+2. Send a small pull request with tests and updated documentation.
+3. Run the checks for the area you touched: `pytest -q` for Python; `npm run lint`, `npm test` and `npm run build` for the frontend.
+4. Never commit `.env`, credentials, personal data or real receipts.
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — modules, MCP transport and tool payload contracts
+- [docs/VISION.md](docs/VISION.md) — the product this is becoming
+- [database/README.md](database/README.md) — entity relationships and the expiry logic
