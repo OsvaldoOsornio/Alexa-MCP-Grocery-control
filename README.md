@@ -17,6 +17,8 @@ Everything the product does runs through a self-hosted **MCP server** that **Ale
 
 Because the pantry lives in PostgreSQL rather than in a chat transcript, **Alexa+** gets state that persists across sessions.
 
+None of that is a claim you have to take on trust. With the server running, `python scripts/mcp_smoke.py` drives it with the **official MCP Python SDK client** and prints the negotiated protocol version, the `Mcp-Session-Id`, the advertised tool schemas and two live `tools/call` results. To connect your own MCP-capable client instead, paste [`docs/mcp-client-config.json`](docs/mcp-client-config.json) into its configuration. Both are covered in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#verify-it-with-a-real-mcp-client-in-two-minutes).
+
 | Tool | Purpose | Key arguments |
 |---|---|---|
 | `get_inventory_status` | Read rows from `v_pantry_inventory_status` | `user_id`, optional `include_consumed` |

@@ -27,6 +27,7 @@ The Next.js frontend is a parallel consumer of the same MCP server, not a layer 
 | `app/tools/inventory.py` | Registers `get_inventory_status`, `modify_item_state`, `ingest_receipt_items`, `update_pantry_context` |
 | `app/tools/recipe.py` | Registers `generate_and_adapt_recipe` |
 | `app/tools/errors.py` | Sanitizing boundary: unexpected exceptions are logged, not sent to the client |
+| `scripts/mcp_smoke.py` | Drives a running server with the official MCP SDK client; not part of the app |
 | `app/services/inventory.py` | Inventory reads and writes, receipt parsing via Bedrock, catalog mapping |
 | `app/services/context.py` | Spoken shelf-life overrides via `custom_expiration_date` |
 | `app/services/recipe.py` | Recipe generation and adaptation over the live pantry |
@@ -71,6 +72,40 @@ Negotiation creates a session; later requests must carry the `Mcp-Session-Id` he
 The client then sends `notifications/initialized`, queries `tools/list` and runs tools with `tools/call`. There are no per-tool REST routes.
 
 **Host validation.** The MCP SDK enables DNS rebinding protection automatically when the server binds to `127.0.0.1`, `localhost` or `::1`, permitting only `127.0.0.1:*`, `localhost:*` and `[::1]:*` as Host headers. Anything else is rejected with HTTP 421. Tests must therefore use an allowed host, not a synthetic one.
+
+## Verify it with a real MCP client in two minutes
+
+The frontend talks to the server through its own JSON-RPC code in `lib/mcp-client.ts`, and the test suite drives the app in-process over ASGI. Neither proves that an independent MCP client can negotiate a session over a socket, so `scripts/mcp_smoke.py` does exactly that, using `mcp.client.streamable_http` and `ClientSession` from the official MCP Python SDK.
+
+```powershell
+docker compose up -d                 # terminal 1, optional but gives real rows
+python -m app.main                   # terminal 2
+python scripts/mcp_smoke.py          # terminal 3
+```
+
+It prints the negotiated `protocolVersion`, the `Mcp-Session-Id` the transport is carrying, every tool with its required arguments, and two `tools/call` results. It exits 0 when the session negotiated and both calls succeeded, 1 when a tool returned an error, and 2 when the server could not be reached.
+
+Without the database it still exits 1 rather than crashing, and the inventory call reports `Inventory database unavailable - start it with: docker compose up -d`. That is the intended demonstration of the sanitizing boundary described under [Tool errors](#tool-errors), not a failure of the script.
+
+### Connect a desktop MCP client
+
+[`docs/mcp-client-config.json`](mcp-client-config.json) is the stanza to paste into an MCP-capable client's configuration file:
+
+```json
+{
+  "mcpServers": {
+    "eat-me-first": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8000/mcp"
+    }
+  }
+}
+```
+
+Merge the inner entry into an existing `mcpServers` object rather than replacing the file. Two things commonly go wrong:
+
+- **Keep the host as `127.0.0.1` or `localhost`.** The server binds to loopback, so the SDK enables DNS rebinding protection and answers any other Host header with HTTP 421. Reaching the server from another machine means changing the bind address, which disables that protection — see the security notes in the README first.
+- **Older clients have no native Streamable HTTP transport.** They need a stdio bridge, typically `npx mcp-remote http://127.0.0.1:8000/mcp` as the command, because this server speaks HTTP and never stdio.
 
 ## Tool contracts
 
