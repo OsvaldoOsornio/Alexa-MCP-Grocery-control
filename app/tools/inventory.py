@@ -9,12 +9,14 @@ from mcp.server.fastmcp import FastMCP
 from app.db.session import async_session_factory
 from app.models import RipenessModifier, StorageLocation
 from app.services import context, inventory
+from app.tools.errors import sanitize_tool_errors
 
 
 def register_inventory_tools(server: FastMCP) -> None:
     """Register the inventory tools on the MCP server."""
 
     @server.tool()
+    @sanitize_tool_errors("Could not read the inventory - see the server log.")
     async def get_inventory_status(
         user_id: int, include_consumed: bool = False
     ) -> dict[str, Any]:
@@ -25,6 +27,7 @@ def register_inventory_tools(server: FastMCP) -> None:
             )
 
     @server.tool()
+    @sanitize_tool_errors("Could not update the item - see the server log.")
     async def modify_item_state(
         user_id: int,
         item_id: int,
@@ -46,6 +49,7 @@ def register_inventory_tools(server: FastMCP) -> None:
             )
 
     @server.tool()
+    @sanitize_tool_errors("Could not adjust the item shelf life - see the server log.")
     async def update_pantry_context(
         user_id: int,
         item_name: str,
@@ -58,6 +62,10 @@ def register_inventory_tools(server: FastMCP) -> None:
             )
 
     @server.tool()
+    @sanitize_tool_errors(
+        "Receipt extraction failed - check that AWS credentials with Bedrock "
+        "access are configured, then see the server log."
+    )
     async def ingest_receipt_items(
         user_id: int,
         image_base64: str,

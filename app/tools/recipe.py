@@ -7,12 +7,17 @@ from mcp.server.fastmcp import FastMCP
 
 from app.db.session import async_session_factory
 from app.services import recipe
+from app.tools.errors import sanitize_tool_errors
 
 
 def register_recipe_tools(server: FastMCP) -> None:
     """Register the recipe tools on the MCP server."""
 
     @server.tool()
+    @sanitize_tool_errors(
+        "Recipe generation failed - check that AWS credentials with Bedrock "
+        "access are configured, then see the server log."
+    )
     async def generate_and_adapt_recipe(
         user_id: int,
         servings: int = 2,

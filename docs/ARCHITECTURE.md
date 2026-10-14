@@ -22,10 +22,11 @@ The Next.js frontend is a parallel consumer of the same MCP server, not a layer 
 
 | Path | Responsibility |
 |---|---|
-| `app/main.py` | Builds the `FastMCP` instance from settings and runs it with `transport="streamable-http"` |
+| `app/main.py` | `build_server()` assembles the `FastMCP` instance from settings; the `mcp` singleton runs with `transport="streamable-http"` |
 | `app/core/config.py` | Pydantic settings from the environment or `.env` |
 | `app/tools/inventory.py` | Registers `get_inventory_status`, `modify_item_state`, `ingest_receipt_items`, `update_pantry_context` |
 | `app/tools/recipe.py` | Registers `generate_and_adapt_recipe` |
+| `app/tools/errors.py` | Sanitizing boundary: unexpected exceptions are logged, not sent to the client |
 | `app/services/inventory.py` | Inventory reads and writes, receipt parsing via Bedrock, catalog mapping |
 | `app/services/context.py` | Spoken shelf-life overrides via `custom_expiration_date` |
 | `app/services/recipe.py` | Recipe generation and adaptation over the live pantry |
@@ -147,6 +148,20 @@ With no `prior_recipe` the tool generates; with one it adapts, keeping the dish 
 
 The response carries `recipe` (title, servings, total_minutes, uses_expiring, ingredients, steps, missing) plus `expiring_soon_in_pantry`, which is derived from the inventory rather than from the model's answer. A client can compare the two and say so when they diverge.
 
+## Tool errors
+
+Anything that escapes a tool body is wrapped by FastMCP into `Error executing tool <name>: <exception>` and sent to the client verbatim. Left alone, that is how a raw `[WinError 1225]` connection-refused string — in the system language of whatever machine the server runs on — became the first thing a reviewer saw when PostgreSQL was not running.
+
+`app/tools/errors.py` provides `sanitize_tool_errors`, applied to all five tools:
+
+| Raised in the tool body | What the client receives |
+|---|---|
+| `ValueError` | the message unchanged |
+| `SQLAlchemyError`, `OSError` | `Inventory database unavailable - start it with: docker compose up -d` |
+| anything else | the tool's own short fallback message |
+
+`ValueError` passes through on purpose. Every one in this codebase is hand-written English validation text that a conversational client should read back to the user, and the tests assert on those strings. Everything else is logged with `logger.exception` under `app.tools.errors`, so the operator keeps the traceback while the client gets an instruction.
+
 ## Bedrock integration notes
 
 Three behaviours of the Converse API shaped this code and are worth knowing before changing it.
@@ -166,6 +181,8 @@ python -m pytest -q
 `tests/test_mcp_streamable_http.py` negotiates the protocol over ASGI, verifies the session, lists tool schemas and calls all three tools with the database layer faked. Receipt service tests replace Bedrock with a fake client, so no AWS credentials are needed.
 
 Running a FastMCP server in-process requires both `mcp.streamable_http_app()` **and** separately entering `async with mcp.session_manager.run()`. Without the second, every request fails. This is not documented in the SDK.
+
+A second, related trap: `session_manager.run()` may be entered only once per `FastMCP` instance. Two tests sharing the module-level `mcp` singleton would leave whichever ran second failing with "run() can only be called once per instance" — a failure that looks like a protocol bug and is really test-ordering. `app.main.build_server()` exists so every test gets its own server.
 
 PostgreSQL trigger tests skip unless `TEST_DATABASE_URL` is set. They are the only tests that exercise the expiry calculation, so a default `pytest -q` run does not cover it. `docker compose up -d` plus that one variable is enough to include them; CI sets both against a service container so the trigger is covered on every push.
 

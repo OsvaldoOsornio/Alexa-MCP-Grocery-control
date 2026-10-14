@@ -10,7 +10,7 @@ import httpx
 import pytest
 from mcp.shared.version import LATEST_PROTOCOL_VERSION
 
-from app.main import mcp
+from app.main import build_server
 from app.models import RipenessModifier, StorageLocation
 from app.services import context, inventory, recipe
 from app.tools import inventory as inventory_tools
@@ -50,6 +50,10 @@ async def test_streamable_http_negotiates_lists_and_calls_inventory_tools(monkey
     monkeypatch.setattr(inventory, "get_inventory_status", get_status_mock)
     monkeypatch.setattr(inventory, "modify_item_state", modify_state_mock)
 
+    # A fresh server per test: `session_manager.run()` may only be entered
+    # once per FastMCP instance, so sharing the module singleton would make
+    # whichever test ran second fail.
+    mcp = build_server()
     app = mcp.streamable_http_app()
     headers = {
         "accept": "application/json, text/event-stream",

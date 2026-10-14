@@ -24,16 +24,20 @@ class PantryInventoryBase(BaseModel):
     purchase_date: date = Field(default_factory=date.today)
     opened_date: Optional[date] = None
     custom_expiration_date: Optional[date] = Field(
-        None, description="Fecha manual (ej. impresa en el empaque); siempre prevalece."
+        None,
+        description=(
+            "Manual date, for example the one printed on the pack; it always "
+            "takes priority over the calculated expiry."
+        ),
     )
     notes: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_opened_state(self) -> "PantryInventoryBase":
         if self.is_opened and self.opened_date is None:
-            raise ValueError("opened_date es obligatorio cuando is_opened=True")
+            raise ValueError("opened_date is required when is_opened=True.")
         if self.opened_date is not None and self.opened_date < self.purchase_date:
-            raise ValueError("opened_date no puede ser anterior a purchase_date")
+            raise ValueError("opened_date cannot be earlier than purchase_date.")
         return self
 
 

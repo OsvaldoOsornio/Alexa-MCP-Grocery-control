@@ -20,7 +20,9 @@ class ShelfLifeRuleBase(BaseModel):
         Decimal("1.00"),
         gt=0,
         le=1,
-        description="Multiplicador sobre `shelf_life_days_unopened` una vez abierto.",
+        description=(
+            "Multiplier applied to `shelf_life_days_unopened` once opened."
+        ),
     )
     frozen_shelf_life_days: Optional[int] = Field(
         None, gt=0, le=3650, description="Shelf life in days if frozen."
