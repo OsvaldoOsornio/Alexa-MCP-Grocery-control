@@ -167,7 +167,9 @@ python -m pytest -q
 
 Running a FastMCP server in-process requires both `mcp.streamable_http_app()` **and** separately entering `async with mcp.session_manager.run()`. Without the second, every request fails. This is not documented in the SDK.
 
-PostgreSQL trigger tests skip unless `TEST_DATABASE_URL` is set. They are the only tests that exercise the expiry calculation, so a default `pytest -q` run does not cover it.
+PostgreSQL trigger tests skip unless `TEST_DATABASE_URL` is set. They are the only tests that exercise the expiry calculation, so a default `pytest -q` run does not cover it. `docker compose up -d` plus that one variable is enough to include them; CI sets both against a service container so the trigger is covered on every push.
+
+They connect with the synchronous `postgresql+psycopg://` driver while the application uses `postgresql+asyncpg://`. `psycopg` therefore lives in `requirements-dev.txt`, not `requirements.txt` — the runtime file stays free of test-only packages.
 
 Frontend tests use Vitest, JSDOM and React Testing Library. `tests/status-pill.test.tsx` checks the five status classes and the transition from `fresh` to `expired`.
 

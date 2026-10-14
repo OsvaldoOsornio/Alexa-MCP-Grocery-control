@@ -1,0 +1,17 @@
+# Development and test dependencies. Install these instead of
+# requirements.txt when you intend to run the test suite:
+#     python -m pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest
+pytest-asyncio
+httpx
+
+# tests/test_integration_postgres.py connects with the SYNCHRONOUS
+# `postgresql+psycopg://` driver, not the `postgresql+asyncpg://` one the
+# application uses, because the trigger assertions read rows back
+# transactionally and do not need an event loop. Without psycopg installed
+# those tests could not run even with TEST_DATABASE_URL set, which is why the
+# PostgreSQL trigger -- the one piece of logic SQLite cannot emulate -- went
+# untested. `[binary]` ships prebuilt wheels so no local libpq is required.
+psycopg[binary]>=3.1

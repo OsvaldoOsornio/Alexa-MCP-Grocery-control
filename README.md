@@ -62,17 +62,28 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module-level detail and the
 
 - Python 3.10 or later
 - Node.js 24 LTS and npm
-- PostgreSQL, locally or via `DATABASE_URL`
+- Docker, for the bundled PostgreSQL — or your own PostgreSQL reachable via `DATABASE_URL`
 - AWS credentials with Amazon Bedrock model access, to process real receipts
 
 ## Run it locally
 
-### 1. Prepare PostgreSQL
+### 1. Start PostgreSQL
 
 ```powershell
-createdb eat_me_first
-psql -d eat_me_first -f database/schema.sql
-psql -d eat_me_first -f database/seed_shelf_life_rules.sql
+docker compose up -d
+```
+
+That is the whole step. `docker-compose.yml` runs `postgres:17` and applies `database/schema.sql`, `database/seed_shelf_life_rules.sql` and `database/seed_demo_user.sql` on first boot, so the database comes up with the ENUMs, the expiry trigger, the shelf-life catalog and the `user_id = 1` the frontend and the examples assume. Credentials match the `DATABASE_URL` default, so nothing needs editing.
+
+The init scripts only run when the data volume is empty. After changing a `.sql` file, run `docker compose down -v` to discard the volume and let them re-apply.
+
+Without Docker, create the database by hand instead:
+
+```powershell
+createdb zero_waste_sous_chef
+psql -d zero_waste_sous_chef -f database/schema.sql
+psql -d zero_waste_sous_chef -f database/seed_shelf_life_rules.sql
+psql -d zero_waste_sous_chef -f database/seed_demo_user.sql
 ```
 
 `database/schema.sql` is the source of truth for the ENUMs, tables, view and trigger. Do not replace the trigger by computing `expiration_date` in Python or React.
@@ -117,10 +128,20 @@ Open `http://localhost:3000`. The frontend also runs without a backend, showing 
 ## Tests
 
 ```powershell
+python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Model, service and MCP protocol tests need neither AWS nor PostgreSQL. The PostgreSQL trigger tests skip unless `TEST_DATABASE_URL` points at a disposable test database with the schema and seed applied; install `psycopg` to enable them.
+`requirements.txt` holds only what the server needs at runtime; `requirements-dev.txt` adds it plus pytest and the `psycopg` driver.
+
+Model, service and MCP protocol tests need neither AWS nor PostgreSQL. The PostgreSQL trigger tests — the only ones that cover the expiry calculation — skip unless `TEST_DATABASE_URL` is set. With the bundled database running:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql+psycopg://postgres:changeme@localhost:5432/zero_waste_sous_chef"
+python -m pytest -q
+```
+
+Note the `+psycopg` driver: the tests connect synchronously, while the application uses `+asyncpg`. CI runs the suite both ways, against a PostgreSQL service container.
 
 From `frontend/`:
 

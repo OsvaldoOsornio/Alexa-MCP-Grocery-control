@@ -1,0 +1,46 @@
+# PostgreSQL for local development and for the test suite.
+#
+# Why this exists: expiry is owned by a PostgreSQL trigger and the schema uses
+# native ENUMs, so SQLite cannot stand in for it. Before this file, running the
+# project meant installing PostgreSQL by hand and remembering to apply two SQL
+# scripts in the right order, which is also why the trigger tests were always
+# skipped. `docker compose up -d` now produces a database that already matches
+# `database/schema.sql`.
+#
+#   docker compose up -d
+#   docker compose down        # keeps the data
+#   docker compose down -v     # discards it, so the init scripts run again
+services:
+  postgres:
+    image: postgres:17
+    container_name: eat-me-first-db
+    environment:
+      # These match the DATABASE_URL default in app/core/config.py and the
+      # value in .env.example, so a fresh clone needs no edits to connect.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: zero_waste_sous_chef
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Scripts in this directory run once, in filename order, and ONLY when
+      # the data volume is empty. Hence the numeric prefixes: the seed needs
+      # the tables, and the demo user needs the `users` stub. Editing these
+      # files after the first boot has no effect until `docker compose down -v`.
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed_shelf_life_rules.sql:/docker-entrypoint-initdb.d/02-seed-shelf-life-rules.sql:ro
+      - ./database/seed_demo_user.sql:/docker-entrypoint-initdb.d/03-seed-demo-user.sql:ro
+    healthcheck:
+      # The container reports "ready" once during init, before the scripts
+      # above have run, so this probe targets the application database by name
+      # rather than the server in general.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zero_waste_sous_chef"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
