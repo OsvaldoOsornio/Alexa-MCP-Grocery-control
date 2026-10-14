@@ -21,11 +21,10 @@ from app.models import PantryInventory
 def _make_item(**overrides):
     # `purchase_date` is set explicitly in Python (the same thing
     # `PantryInventoryCreate` does via Pydantic in the API layer) instead of
-    # depender del `server_default=CURRENT_DATE` de la columna: ese default
-    # es un respaldo para inserts SQL directos, pero comparar una fecha
-    # calculada por el motor de la base de datos (UTC) contra una fecha
-    # calculada en Python (huso horario local) es una carrera cerca de la
-    # medianoche UTC y no algo que un test deba depender.
+    # relying on the column's `server_default=CURRENT_DATE`: that default is
+    # a fallback for direct SQL inserts, but comparing a date computed by the
+    # database engine (UTC) against one computed in Python (local timezone)
+    # is a race near UTC midnight, and not something a test should depend on.
     defaults = dict(
         display_name="Alqueria milk",
         storage_location="refrigerator",
@@ -51,11 +50,13 @@ def test_create_item_with_defaults(session, user_id, milk_rule):
 
 
 def test_purchase_date_has_a_database_level_fallback_default(session, user_id, milk_rule):
-    """Si el caller no lo especifica, la columna debe autocompletarse igual
-    (respaldo `server_default=CURRENT_DATE`, ver app/models/pantry_inventory.py).
-    No se compara contra `date.today()` de Python: `CURRENT_DATE` en SQLite/
-    Postgres is evaluated in UTC and can differ by a day from the local clock just
-    alrededor de la medianoche UTC; solo se verifica que quede poblada.
+    """When the caller omits it, the column still fills itself in.
+
+    This is the `server_default=CURRENT_DATE` fallback, see
+    app/models/pantry_inventory.py. It is deliberately not compared against
+    Python's `date.today()`: `CURRENT_DATE` on SQLite and Postgres is
+    evaluated in UTC and can differ by a day from the local clock right
+    around UTC midnight. Only that it is populated is asserted.
     """
     item = PantryInventory(
         user_id=user_id,
@@ -143,7 +144,7 @@ def test_consumed_at_requires_is_consumed_true(session, user_id, milk_rule):
         user_id=user_id,
         shelf_life_rule_id=milk_rule.id,
         is_consumed=False,
-        consumed_at=date.today(),  # cualquier valor no nulo debe fallar
+        consumed_at=date.today(),  # any non-null value must fail
     )
     session.add(item)
     with pytest.raises(IntegrityError):

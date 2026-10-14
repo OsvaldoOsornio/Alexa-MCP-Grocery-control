@@ -30,7 +30,7 @@ def test_create_schema_accepts_valid_payload():
 
 
 def test_create_schema_applies_multiplier_default():
-    # `open_shelf_life_multiplier` no se pasa -> debe usar el default 1.00
+    # `open_shelf_life_multiplier` is omitted -> the 1.00 default applies
     payload = _valid_payload()
     payload.pop("open_shelf_life_multiplier")
     rule = ShelfLifeRuleCreate(**payload)
