@@ -1,5 +1,7 @@
 # Eat Me First
 
+[![CI](https://github.com/OsvaldoOsornio/Alexa-MCP-Grocery-control/actions/workflows/ci.yml/badge.svg)](https://github.com/OsvaldoOsornio/Alexa-MCP-Grocery-control/actions/workflows/ci.yml)
+
 **An Alexa+ kitchen agent that knows what is about to go bad — and tells you what to cook with it.**
 
 Built for the Build, Ship, Shape: Amazon Developer Hackathon, **Alexa+ track**, using a self-hosted **MCP server** that implements specification **2025-11-25 over Streamable HTTP**, with **Amazon Bedrock** for multimodal receipt extraction and adaptive recipe reasoning.
@@ -143,7 +145,14 @@ $env:TEST_DATABASE_URL = "postgresql+psycopg://postgres:changeme@localhost:5432/
 python -m pytest -q
 ```
 
-Note the `+psycopg` driver: the tests connect synchronously, while the application uses `+asyncpg`. CI runs the suite both ways, against a PostgreSQL service container.
+Note the `+psycopg` driver: the tests connect synchronously, while the application uses `+asyncpg`.
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request:
+
+- **Python** — `pytest -q` against a `postgres:17` service container, with `database/schema.sql` and both seeds applied and `TEST_DATABASE_URL` set, so the trigger tests execute rather than skip. A final step fails the job if they were skipped anyway, because a green run that quietly skipped them would read as coverage that is not there.
+- **Frontend** — `npm ci`, `npm run lint`, `npm test` and `npm run build` on Node 24.
 
 From `frontend/`:
 
@@ -172,7 +181,7 @@ npm run build
 - Processing real receipts requires Bedrock permissions and can incur AWS costs. Demo mode calls neither Bedrock nor the database.
 - Receipt text flows into a Bedrock prompt. The blast radius is limited: the response model forbids extra fields and caps lengths, and `ingredient_name` is matched against the catalog rather than trusted.
 - The database ships a `users` stub. Adjust its key and the relationships before integrating a real identity provider.
-- `npm audit` reports advisories in development-only dependencies of `eslint-config-next`. They do not reach the production bundle, and `npm audit fix --force` breaks the Next 16 setup.
+- `npm audit` reports 5 high-severity advisories, all of them the same `braces` denial-of-service reached through one dev-only chain: `eslint-config-next` -> `@next/eslint-plugin-next` -> `fast-glob` -> `micromatch` -> `braces`. Nothing in `app/`, `components/` or `lib/` imports it, so it never enters the production bundle and is not reachable at runtime; it runs only when you run `npm run lint`. `npm audit fix --force` 'fixes' this by installing `eslint-config-next@14.2.35`, two major versions below the `next@16.4.0` in use, which breaks the setup. The advisories are therefore accepted deliberately, not overlooked, and clear when upstream ships a patched `fast-glob`.
 
 ## License
 
