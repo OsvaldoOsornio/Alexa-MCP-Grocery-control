@@ -7,9 +7,11 @@ import { ItemCard, RestOfKitchenCard } from "@/components/item-card";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import {
   byUrgency, createDemoInventory, createDemoReceiptItems, DEMO_USER_ID,
-  initialDemoEvents, locationLabel, needsAttention,
+  formatDate, initialDemoEvents, locationLabel, needsAttention,
+  RIPENESS_UTTERANCES,
   type DemoEvent, type InventoryItem, type InventoryStatusResponse,
-  type McpToolName, type StorageLocation, type VoiceTurn,
+  type McpToolName, type PantryContextResponse, type RipenessModifier,
+  type StorageLocation, type VoiceTurn,
 } from "@/lib/kitchen-data";
 
 type ConnectionState = "checking" | "demo" | "live";
@@ -262,6 +264,59 @@ export default function Home() {
     }
   }
 
+  async function handleContextEvent(itemName: string, modifier: RipenessModifier) {
+    setIsWorking(true);
+    beginTurn(RIPENESS_UTTERANCES[modifier](itemName), "update_pantry_context");
+    try {
+      if (connection !== "live") {
+        finishTurn(
+          "I cannot change a shelf life without the database. MCP is not connected.",
+          "failed",
+        );
+        setToast("Spoken context needs a live MCP connection.");
+        return;
+      }
+      const result = await invokeTool<PantryContextResponse>("update_pantry_context", {
+        user_id: DEMO_USER_ID, item_name: itemName, modifier,
+      });
+      // The tool answers ambiguity with candidate names rather than guessing,
+      // so the honest reply is the follow-up question, not an error.
+      if (!result.success || !result.item) {
+        const candidates = result.candidates ?? [];
+        finishTurn(
+          candidates.length
+            ? `Which one did you mean: ${candidates.join(", ")}?`
+            : result.error ?? "I could not find that in your pantry.",
+          "failed",
+        );
+        setToast(result.error ?? "No matching item.");
+        return;
+      }
+
+      const { display_name, expiration_date, days_remaining, discard_recommended } = result.item;
+      await refreshInventory();
+      announce(
+        "Shelf life rewritten",
+        `${display_name} · now ${formatDate(expiration_date)}`,
+        "opened",
+      );
+      finishTurn(
+        discard_recommended
+          ? `Then throw the ${display_name} out. I have marked that as gone off today.`
+          : `Noted. I have moved the ${display_name} to ${formatDate(expiration_date)}, ${
+            days_remaining === 1 ? "1 day" : `${days_remaining} days`} from now.`,
+        "answered",
+      );
+      setToast(`${display_name} now expires ${formatDate(expiration_date)}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not apply the context.";
+      finishTurn(message, "failed");
+      setToast(message);
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
   return (
     <main className="bench">
       <div className="device-shell">
@@ -321,6 +376,7 @@ export default function Home() {
       <DevBench
         items={items} events={events} isWorking={isWorking}
         onReceipt={handleReceipt} onStateEvent={handleStateEvent}
+        onContextEvent={handleContextEvent}
       />
 
       {connection === "demo" && (

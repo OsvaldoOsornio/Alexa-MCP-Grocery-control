@@ -401,7 +401,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 
 .bench-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 4px;
   border: 1px solid rgba(255, 255, 255, .1);

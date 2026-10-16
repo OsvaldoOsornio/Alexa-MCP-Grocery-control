@@ -80,6 +80,22 @@ export type PantryContextResponse = {
   };
 };
 
+// What a person would actually say to produce each modifier. The device only
+// ever sees the modifier; this map exists so the transcript can show the
+// sentence the intent came from instead of the enum value.
+//
+// Every phrasing is built on a modal ("will need", "should", "must have") so
+// that it stays grammatical whether the display name is singular or plural.
+// Names come from the user's own pantry -- "Whole milk 1L" and "Vine tomatoes"
+// go through the same template -- so the sentence cannot assume number.
+export const RIPENESS_UTTERANCES: Record<RipenessModifier, (name: string) => string> = {
+  underripe: (name) => `Alexa, the ${name} will need a few more days.`,
+  ripe: (name) => `Alexa, the ${name} should be eaten soon.`,
+  very_ripe: (name) => `Alexa, the ${name} should go today.`,
+  smells_off: (name) => `Alexa, the ${name} must have gone off.`,
+  opened_long_ago: (name) => `Alexa, I opened the ${name} a while back.`,
+};
+
 // Mirrors `app.services.recipe.Recipe`.
 export type RecipeIngredient = {
   name: string;

@@ -2,16 +2,18 @@
 
 import {
   ArrowRight, Check, ChevronDown, CircleCheck, LoaderCircle, ScanLine,
-  Settings2, Snowflake, Sparkles, Terminal, Upload, X,
+  MessageSquareQuote, Settings2, Snowflake, Sparkles, Terminal, Upload, X,
 } from "lucide-react";
 import Image from "next/image";
 import { useRef, useState, type ChangeEvent } from "react";
 import {
-  type DemoEvent, type InventoryItem, type StorageLocation,
+  RIPENESS_UTTERANCES,
+  type DemoEvent, type InventoryItem, type RipenessModifier,
+  type StorageLocation,
 } from "@/lib/kitchen-data";
 
 export type StateAction = "open" | "consume" | "move";
-type BenchMode = "receipt" | "state";
+type BenchMode = "receipt" | "state" | "context";
 
 function EventMark({ kind }: { kind: DemoEvent["kind"] }) {
   if (kind === "receipt") return <ScanLine size={15} />;
@@ -26,6 +28,7 @@ type DevBenchProps = {
   isWorking: boolean;
   onReceipt(file: File): void;
   onStateEvent(itemId: number, action: StateAction, location: StorageLocation): void;
+  onContextEvent(itemName: string, modifier: RipenessModifier): void;
 };
 
 /**
@@ -39,11 +42,12 @@ type DevBenchProps = {
  * It keeps its own form state. The page only receives the action to perform.
  */
 export function DevBench({
-  items, events, isWorking, onReceipt, onStateEvent,
+  items, events, isWorking, onReceipt, onStateEvent, onContextEvent,
 }: DevBenchProps) {
   const [mode, setMode] = useState<BenchMode>("receipt");
   const [stateAction, setStateAction] = useState<StateAction>("open");
   const [moveLocation, setMoveLocation] = useState<StorageLocation>("freezer");
+  const [modifier, setModifier] = useState<RipenessModifier>("underripe");
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState("");
@@ -112,6 +116,13 @@ export function DevBench({
             >
               <Settings2 size={15} /> Item state
             </button>
+            <button
+              role="tab" aria-selected={mode === "context"}
+              className={mode === "context" ? "bench-tab selected" : "bench-tab"}
+              onClick={() => setMode("context")}
+            >
+              <MessageSquareQuote size={15} /> Spoken context
+            </button>
           </div>
 
           {mode === "receipt" ? (
@@ -155,7 +166,7 @@ export function DevBench({
                 {!isWorking && <ArrowRight size={15} />}
               </button>
             </div>
-          ) : (
+          ) : mode === "state" ? (
             <div className="bench-form">
               <p className="bench-hint">
                 Sends <code>modify_item_state</code>, the tool behind
@@ -219,6 +230,61 @@ export function DevBench({
               >
                 {isWorking ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}
                 {isWorking ? "Calling the tool" : "Fire the state event"}
+                {!isWorking && <ArrowRight size={15} />}
+              </button>
+            </div>
+          ) : (
+            <div className="bench-form">
+              <p className="bench-hint">
+                Sends <code>update_pantry_context</code>. This is the one that
+                shows voice beating a rules engine: what the person noticed out
+                loud overrides the catalog shelf life, and the new date comes
+                straight back from PostgreSQL.
+              </p>
+              <label className="bench-label" htmlFor="bench-context-item">Item</label>
+              <div className="bench-select">
+                <select
+                  id="bench-context-item" value={targetId ?? ""}
+                  onChange={(event) => setSelectedItemId(Number(event.target.value))}
+                  disabled={!actionable.length}
+                >
+                  {actionable.length ? (
+                    actionable.map((item) => (
+                      <option key={item.id} value={item.id}>{item.display_name}</option>
+                    ))
+                  ) : (
+                    <option value="">No items yet</option>
+                  )}
+                </select>
+                <ChevronDown size={15} />
+              </div>
+
+              <label className="bench-label" htmlFor="bench-modifier">What was said</label>
+              <div className="bench-select">
+                <select
+                  id="bench-modifier" value={modifier}
+                  onChange={(event) =>
+                    setModifier(event.target.value as RipenessModifier)}
+                >
+                  {(Object.keys(RIPENESS_UTTERANCES) as RipenessModifier[]).map((key) => (
+                    <option key={key} value={key}>
+                      {RIPENESS_UTTERANCES[key](target?.display_name ?? "item")}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={15} />
+              </div>
+
+              <button
+                className="bench-fire" disabled={isWorking || !target}
+                onClick={() => {
+                  if (target) onContextEvent(target.display_name, modifier);
+                }}
+              >
+                {isWorking
+                  ? <LoaderCircle className="spin" size={15} />
+                  : <MessageSquareQuote size={15} />}
+                {isWorking ? "Calling the tool" : "Fire the spoken context"}
                 {!isWorking && <ArrowRight size={15} />}
               </button>
             </div>
