@@ -2,7 +2,8 @@
 
 import {
   ArrowRight, Check, ChevronDown, CircleCheck, LoaderCircle, ScanLine,
-  MessageSquareQuote, Settings2, Snowflake, Sparkles, Terminal, Upload, X,
+  CookingPot, MessageSquareQuote, Settings2, Snowflake, Sparkles, Terminal,
+  Upload, X,
 } from "lucide-react";
 import Image from "next/image";
 import { useRef, useState, type ChangeEvent } from "react";
@@ -13,7 +14,7 @@ import {
 } from "@/lib/kitchen-data";
 
 export type StateAction = "open" | "consume" | "move";
-type BenchMode = "receipt" | "state" | "context";
+type BenchMode = "receipt" | "state" | "context" | "recipe";
 
 function EventMark({ kind }: { kind: DemoEvent["kind"] }) {
   if (kind === "receipt") return <ScanLine size={15} />;
@@ -29,6 +30,7 @@ type DevBenchProps = {
   onReceipt(file: File): void;
   onStateEvent(itemId: number, action: StateAction, location: StorageLocation): void;
   onContextEvent(itemName: string, modifier: RipenessModifier): void;
+  onRecipe(servings: number): void;
 };
 
 /**
@@ -42,12 +44,13 @@ type DevBenchProps = {
  * It keeps its own form state. The page only receives the action to perform.
  */
 export function DevBench({
-  items, events, isWorking, onReceipt, onStateEvent, onContextEvent,
+  items, events, isWorking, onReceipt, onStateEvent, onContextEvent, onRecipe,
 }: DevBenchProps) {
   const [mode, setMode] = useState<BenchMode>("receipt");
   const [stateAction, setStateAction] = useState<StateAction>("open");
   const [moveLocation, setMoveLocation] = useState<StorageLocation>("freezer");
   const [modifier, setModifier] = useState<RipenessModifier>("underripe");
+  const [servings, setServings] = useState(2);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState("");
@@ -122,6 +125,13 @@ export function DevBench({
               onClick={() => setMode("context")}
             >
               <MessageSquareQuote size={15} /> Spoken context
+            </button>
+            <button
+              role="tab" aria-selected={mode === "recipe"}
+              className={mode === "recipe" ? "bench-tab selected" : "bench-tab"}
+              onClick={() => setMode("recipe")}
+            >
+              <CookingPot size={15} /> Cook
             </button>
           </div>
 
@@ -233,7 +243,7 @@ export function DevBench({
                 {!isWorking && <ArrowRight size={15} />}
               </button>
             </div>
-          ) : (
+          ) : mode === "context" ? (
             <div className="bench-form">
               <p className="bench-hint">
                 Sends <code>update_pantry_context</code>. This is the one that
@@ -285,6 +295,35 @@ export function DevBench({
                   ? <LoaderCircle className="spin" size={15} />
                   : <MessageSquareQuote size={15} />}
                 {isWorking ? "Calling the tool" : "Fire the spoken context"}
+                {!isWorking && <ArrowRight size={15} />}
+              </button>
+            </div>
+          ) : (
+            <div className="bench-form">
+              <p className="bench-hint">
+                Sends <code>generate_and_adapt_recipe</code> and hands the screen
+                over to the step card. This tool reasons with Amazon Bedrock, so
+                without AWS credentials it fails -- and the screen shows that
+                failure rather than a stand-in recipe.
+              </p>
+              <label className="bench-label" htmlFor="bench-servings">Servings</label>
+              <div className="bench-select">
+                <select
+                  id="bench-servings" value={servings}
+                  onChange={(event) => setServings(Number(event.target.value))}
+                >
+                  {[1, 2, 3, 4, 6].map((count) => (
+                    <option key={count} value={count}>{count}</option>
+                  ))}
+                </select>
+                <ChevronDown size={15} />
+              </div>
+              <button
+                className="bench-fire" disabled={isWorking}
+                onClick={() => onRecipe(servings)}
+              >
+                {isWorking ? <LoaderCircle className="spin" size={15} /> : <CookingPot size={15} />}
+                {isWorking ? "Calling the tool" : "Ask what to cook"}
                 {!isWorking && <ArrowRight size={15} />}
               </button>
             </div>

@@ -4,14 +4,15 @@ import { CloudOff, CookingPot, RotateCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DevBench, type StateAction } from "@/components/dev-bench";
 import { ItemCard, RestOfKitchenCard } from "@/components/item-card";
+import { RecipeStage, type RecipeView } from "@/components/recipe-stage";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import {
   byUrgency, createDemoInventory, createDemoReceiptItems, DEMO_USER_ID,
   formatDate, initialDemoEvents, locationLabel, needsAttention,
   RIPENESS_UTTERANCES,
   type DemoEvent, type InventoryItem, type InventoryStatusResponse,
-  type McpToolName, type PantryContextResponse, type RipenessModifier,
-  type StorageLocation, type VoiceTurn,
+  type McpToolName, type PantryContextResponse, type RecipeResponse,
+  type RipenessModifier, type StorageLocation, type VoiceTurn,
 } from "@/lib/kitchen-data";
 
 type ConnectionState = "checking" | "demo" | "live";
@@ -84,6 +85,8 @@ export default function Home() {
   const [turn, setTurn] = useState<VoiceTurn>(OPENING_TURN);
   const [isWorking, setIsWorking] = useState(false);
   const [toast, setToast] = useState("");
+  const [recipeView, setRecipeView] = useState<RecipeView | null>(null);
+  const [recipeStep, setRecipeStep] = useState(0);
 
   // Opens the exchange with the question the device is actually for. The tool
   // name in the strip is the one this call is issued with, and the reply is
@@ -317,10 +320,57 @@ export default function Home() {
     }
   }
 
+  async function handleRecipe(servings: number) {
+    setIsWorking(true);
+    setRecipeStep(0);
+    setRecipeView({ state: "working", error: "", recipe: null, expiringInPantry: [] });
+    beginTurn("Alexa, what can I cook tonight?", "generate_and_adapt_recipe");
+    try {
+      if (connection !== "live") {
+        throw new Error("The MCP server is not connected, so there is no pantry to cook from.");
+      }
+      const result = await invokeTool<RecipeResponse>("generate_and_adapt_recipe", {
+        user_id: DEMO_USER_ID, servings,
+      });
+      if (!result.success || !result.recipe) {
+        throw new Error(result.error ?? "The recipe tool returned no recipe.");
+      }
+      setRecipeView({
+        state: "ready", error: "", recipe: result.recipe,
+        expiringInPantry: result.expiring_soon_in_pantry ?? [],
+      });
+      const rescued = result.recipe.uses_expiring;
+      finishTurn(
+        rescued.length
+          ? `${result.recipe.title}, ${result.recipe.total_minutes} minutes. It uses ${rescued.join(" and ")}.`
+          : `${result.recipe.title}, ${result.recipe.total_minutes} minutes.`,
+        "answered",
+      );
+      announce("Recipe generated", result.recipe.title, "receipt");
+    } catch (error) {
+      // No fallback recipe. A plausible-looking dish here would be the one
+      // thing on this screen that is not real, and the whole project rests on
+      // demo data being labelled as demo data.
+      const message = error instanceof Error
+        ? error.message
+        : "The recipe tool could not be reached.";
+      setRecipeView({ state: "failed", error: message, recipe: null, expiringInPantry: [] });
+      finishTurn(message, "failed");
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
   return (
     <main className="bench">
       <div className="device-shell">
         <div className="device-screen">
+          {recipeView ? (
+            <RecipeStage
+              view={recipeView} step={recipeStep}
+              onStep={setRecipeStep} onClose={() => setRecipeView(null)}
+            />
+          ) : null}
           <VoiceTranscript turn={turn} />
 
           <section className="ambient" aria-label="Items needing attention">
@@ -376,7 +426,7 @@ export default function Home() {
       <DevBench
         items={items} events={events} isWorking={isWorking}
         onReceipt={handleReceipt} onStateEvent={handleStateEvent}
-        onContextEvent={handleContextEvent}
+        onContextEvent={handleContextEvent} onRecipe={handleRecipe}
       />
 
       {connection === "demo" && (
