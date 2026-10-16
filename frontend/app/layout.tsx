@@ -14,8 +14,10 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Eat Me First | Kitchen",
-  description: "Simulate kitchen events and read your inventory traffic light.",
+  title: "Eat Me First | Echo Show",
+  description:
+    "An Echo Show kitchen display: ask what needs eating, and watch the MCP "
+    + "tool that answers.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
