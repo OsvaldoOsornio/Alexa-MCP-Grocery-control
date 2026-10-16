@@ -1,3 +1,5 @@
+import type { McpToolName } from "@/lib/kitchen-data";
+
 const MCP_PROTOCOL_VERSION = "2025-11-25";
 const ACCEPT_HEADER = "application/json, text/event-stream";
 
@@ -10,12 +12,9 @@ type JsonRpcPayload = {
   };
 };
 
-export type McpToolName =
-  | "get_inventory_status"
-  | "modify_item_state"
-  | "ingest_receipt_items"
-  | "update_pantry_context"
-  | "generate_and_adapt_recipe";
+// Declared in kitchen-data.ts, which has no server-only imports, and
+// re-exported here so existing callers keep importing it from the transport.
+export type { McpToolName } from "@/lib/kitchen-data";
 
 async function readRpcResponse(response: Response): Promise<JsonRpcPayload> {
   const body = await response.text();

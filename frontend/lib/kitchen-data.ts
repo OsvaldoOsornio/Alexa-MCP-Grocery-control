@@ -1,3 +1,28 @@
+// The five tools `app/tools/` registers on the MCP server. This union lives
+// here rather than in mcp-client.ts so that client components can name a tool
+// without importing the server-side transport module.
+export type McpToolName =
+  | "get_inventory_status"
+  | "modify_item_state"
+  | "ingest_receipt_items"
+  | "update_pantry_context"
+  | "generate_and_adapt_recipe";
+
+// One turn of the voice exchange shown across the top of the Echo Show frame.
+//
+// `tool` is the identifier the MCP call was actually made with, so the strip
+// cannot drift from what the server ran. `reply` is composed from that call's
+// real response. `utterance` is the one scripted field: this machine has no
+// microphone, so the wording is ours. The page says so in plain words on the
+// developer bench rather than implying speech recognition it does not have.
+export type VoiceTurn = {
+  id: number;
+  utterance: string;
+  tool: McpToolName;
+  reply: string;
+  state: "working" | "answered" | "failed";
+};
+
 export type StorageLocation = "pantry" | "refrigerator" | "freezer";
 export type InventoryStatus =
   | "fresh"
@@ -299,6 +324,31 @@ export function statusLabel(status: InventoryStatus): string {
     unknown: "No date",
   };
   return labels[status];
+}
+
+// Most urgent first: expired, then whatever expires soonest, then items with
+// no date at all. This is the order the Echo Show cards are chosen in, because
+// an ambient screen gets one chance to show the right four things.
+export function byUrgency(a: InventoryItem, b: InventoryItem): number {
+  const rank = (item: InventoryItem) =>
+    item.days_remaining === null ? Number.MAX_SAFE_INTEGER : item.days_remaining;
+  return rank(a) - rank(b);
+}
+
+export function needsAttention(item: InventoryItem): boolean {
+  return item.status === "expired" || item.status === "expiring_soon";
+}
+
+// Split into a numeral and a word so the card can set the numeral in display
+// type and still keep the word that makes it unambiguous at two metres.
+export function dayCountdown(days: number | null): { value: string; unit: string } {
+  if (days === null) return { value: "--", unit: "no date on file" };
+  if (days < 0) {
+    const ago = Math.abs(days);
+    return { value: String(ago), unit: ago === 1 ? "day past date" : "days past date" };
+  }
+  if (days === 0) return { value: "0", unit: "use it today" };
+  return { value: String(days), unit: days === 1 ? "day left" : "days left" };
 }
 
 export function locationLabel(location: StorageLocation): string {
