@@ -79,8 +79,14 @@ function spokenAttention(items: InventoryItem[]): string {
 }
 
 export default function Home() {
-  const [items, setItems] = useState<InventoryItem[]>(createDemoInventory);
-  const [events, setEvents] = useState<DemoEvent[]>(initialDemoEvents);
+  // Starts empty on purpose. Demo data used to seed this, which meant it was
+  // server-rendered -- so its dates had to be pinned to a fixed origin to avoid
+  // a hydration mismatch, and they went stale. Now the demo set is only built
+  // after the live call has actually failed, which both lets the dates come
+  // from today and stops the screen ever showing fixtures under an "MCP live"
+  // badge.
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [events, setEvents] = useState<DemoEvent[]>([]);
   const [connection, setConnection] = useState<ConnectionState>("checking");
   const [turn, setTurn] = useState<VoiceTurn>(OPENING_TURN);
   const [isWorking, setIsWorking] = useState(false);
@@ -103,6 +109,8 @@ export default function Home() {
     }).catch((error: unknown) => {
       if (!active) return;
       setConnection("demo");
+      setItems(createDemoInventory());
+      setEvents(initialDemoEvents());
       setTurn({
         ...OPENING_TURN,
         reply: error instanceof Error ? error.message : "The MCP server did not answer.",
@@ -118,6 +126,7 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const isLoading = connection === "checking";
   const activeItems = items.filter((item) => item.status !== "consumed");
   const attentionItems = activeItems.filter(needsAttention).sort(byUrgency);
   const freshCount = activeItems.filter((item) => item.status === "fresh").length;
@@ -375,13 +384,17 @@ export default function Home() {
 
           <section className="ambient" aria-label="Items needing attention">
             <p className="ambient-count">
-              <strong>{attentionItems.length}</strong>
+              <strong>{isLoading ? "—" : attentionItems.length}</strong>
               <span>
-                {attentionItems.length === 1
-                  ? "item needs eating"
-                  : "items need eating"}
+                {isLoading
+                  ? "reading the pantry"
+                  : attentionItems.length === 1
+                    ? "item needs eating"
+                    : "items need eating"}
                 <small>
-                  {freshCount} {freshCount === 1 ? "other item is" : "others are"} still fresh
+                  {isLoading
+                    ? "asking the MCP server"
+                    : `${freshCount} ${freshCount === 1 ? "other item is" : "others are"} still fresh`}
                 </small>
               </span>
             </p>
@@ -391,11 +404,20 @@ export default function Home() {
             </span>
           </section>
 
-          <section className="card-grid" aria-label="Pantry" aria-live="polite">
-            {shown.map((item) => <ItemCard item={item} key={item.id} />)}
-            {shown.length < CARD_SLOTS
-              ? <RestOfKitchenCard hidden={hidden} tracked={ranked.length} />
-              : null}
+          <section
+            className={isLoading ? "card-grid grid-waiting" : "card-grid"}
+            aria-label="Pantry" aria-live="polite"
+          >
+            {isLoading ? (
+              <p>Reading the pantry</p>
+            ) : (
+              <>
+                {shown.map((item) => <ItemCard item={item} key={item.id} />)}
+                {shown.length < CARD_SLOTS
+                  ? <RestOfKitchenCard hidden={hidden} tracked={ranked.length} />
+                  : null}
+              </>
+            )}
           </section>
 
           <footer className="device-foot">
@@ -405,7 +427,9 @@ export default function Home() {
             <span className="device-source">
               {connection === "live"
                 ? "Expiry dates computed in PostgreSQL"
-                : "Demo data · not from the database"}
+                : connection === "checking"
+                  ? "Connecting to the MCP server"
+                  : "Demo data · not from the database"}
             </span>
             <button
               className="device-sync" onClick={retryConnection}

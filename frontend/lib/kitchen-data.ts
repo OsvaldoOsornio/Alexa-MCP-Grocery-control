@@ -141,14 +141,6 @@ function dateAfter(days: number, origin = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
-// Pinned to a fixed origin on purpose: this data seeds the initial React
-// state, which renders on the server as well as the client, and a date
-// derived from `new Date()` there would produce a hydration mismatch.
-// The trade-off is that these demo dates drift from "today" over time.
-function demoDateAfter(days: number): string {
-  return dateAfter(days, new Date("2026-10-07T12:00:00"));
-}
-
 export function createDemoInventory(): InventoryItem[] {
   return [
     {
@@ -161,7 +153,7 @@ export function createDemoInventory(): InventoryItem[] {
       quantity: "6.00",
       unit: "units",
       is_opened: false,
-      expiration_date: demoDateAfter(2),
+      expiration_date: dateAfter(2),
       days_remaining: 2,
       status: "expiring_soon",
     },
@@ -175,7 +167,7 @@ export function createDemoInventory(): InventoryItem[] {
       quantity: "4.00",
       unit: "units",
       is_opened: true,
-      expiration_date: demoDateAfter(5),
+      expiration_date: dateAfter(5),
       days_remaining: 5,
       status: "fresh",
     },
@@ -189,7 +181,7 @@ export function createDemoInventory(): InventoryItem[] {
       quantity: "120.00",
       unit: "grams",
       is_opened: true,
-      expiration_date: demoDateAfter(-1),
+      expiration_date: dateAfter(-1),
       days_remaining: -1,
       status: "expired",
     },
@@ -203,7 +195,7 @@ export function createDemoInventory(): InventoryItem[] {
       quantity: "10.00",
       unit: "units",
       is_opened: false,
-      expiration_date: demoDateAfter(12),
+      expiration_date: dateAfter(12),
       days_remaining: 12,
       status: "fresh",
     },
@@ -217,7 +209,7 @@ export function createDemoInventory(): InventoryItem[] {
       quantity: "750.00",
       unit: "grams",
       is_opened: false,
-      expiration_date: demoDateAfter(120),
+      expiration_date: dateAfter(120),
       days_remaining: 120,
       status: "fresh",
     },
@@ -245,7 +237,7 @@ export function createDemoInventory(): InventoryItem[] {
       quantity: "450.00",
       unit: "grams",
       is_opened: false,
-      expiration_date: demoDateAfter(1),
+      expiration_date: dateAfter(1),
       days_remaining: 1,
       status: "expiring_soon",
     },
@@ -259,7 +251,7 @@ export function createDemoInventory(): InventoryItem[] {
       quantity: "0.00",
       unit: "packs",
       is_opened: false,
-      expiration_date: demoDateAfter(20),
+      expiration_date: dateAfter(20),
       days_remaining: 20,
       status: "consumed",
     },
@@ -299,29 +291,33 @@ export function createDemoReceiptItems(startId: number): InventoryItem[] {
   ];
 }
 
-export const initialDemoEvents: DemoEvent[] = [
-  {
-    id: 1,
-    title: "Yogurt marked as opened",
-    detail: "Plain yogurt · yesterday, 18:42",
-    time: "18:42",
-    kind: "opened",
-  },
-  {
-    id: 2,
-    title: "Receipt processed",
-    detail: "Corner supermarket · Monday",
-    time: "Mon",
-    kind: "receipt",
-  },
-  {
-    id: 3,
-    title: "Chicken moved to the freezer",
-    detail: "Chicken breast · Monday",
-    time: "Mon",
-    kind: "moved",
-  },
-];
+// Only built once the live call has failed, so these never appear under an
+// "MCP live" badge. In demo mode the ribbon says so.
+export function initialDemoEvents(): DemoEvent[] {
+  return [
+    {
+      id: 1,
+      title: "Yogurt marked as opened",
+      detail: "Plain yogurt · yesterday, 18:42",
+      time: "18:42",
+      kind: "opened",
+    },
+    {
+      id: 2,
+      title: "Receipt processed",
+      detail: "Corner supermarket · Monday",
+      time: "Mon",
+      kind: "receipt",
+    },
+    {
+      id: 3,
+      title: "Chicken moved to the freezer",
+      detail: "Chicken breast · Monday",
+      time: "Mon",
+      kind: "moved",
+    },
+  ];
+}
 
 export function formatDate(value: string | null): string {
   if (!value) return "No date";
