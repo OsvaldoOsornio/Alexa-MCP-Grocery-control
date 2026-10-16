@@ -13,7 +13,9 @@ type JsonRpcPayload = {
 export type McpToolName =
   | "get_inventory_status"
   | "modify_item_state"
-  | "ingest_receipt_items";
+  | "ingest_receipt_items"
+  | "update_pantry_context"
+  | "generate_and_adapt_recipe";
 
 async function readRpcResponse(response: Response): Promise<JsonRpcPayload> {
   const body = await response.text();

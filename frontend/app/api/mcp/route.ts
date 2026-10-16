@@ -1,9 +1,14 @@
 import { callMcpTool, type McpToolName } from "@/lib/mcp-client";
 
+// The full tool surface the MCP server exposes. The Echo Show screen drives
+// all five, so the allow-list is no longer a subset: it exists to reject
+// anything a tampered client body asks for that the server does not define.
 const allowedTools = new Set<McpToolName>([
   "get_inventory_status",
   "modify_item_state",
   "ingest_receipt_items",
+  "update_pantry_context",
+  "generate_and_adapt_recipe",
 ]);
 
 export async function POST(request: Request) {

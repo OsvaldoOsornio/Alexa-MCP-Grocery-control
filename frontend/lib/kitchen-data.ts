@@ -27,6 +27,62 @@ export type InventoryStatusResponse = {
   items: InventoryItem[];
 };
 
+// Mirrors `app.models.enums.RipenessModifier`, the input vocabulary of
+// `update_pantry_context`. It has no PostgreSQL counterpart, so this union is
+// the only place the frontend pins the spelling.
+export type RipenessModifier =
+  | "very_ripe"
+  | "ripe"
+  | "underripe"
+  | "smells_off"
+  | "opened_long_ago";
+
+// `update_pantry_context` answers either with the item it rewrote, or with a
+// list of candidate names so a voice client can ask a follow-up question
+// instead of guessing. Both arms arrive on the same payload.
+export type PantryContextResponse = {
+  success: boolean;
+  error?: string;
+  candidates?: string[];
+  item?: {
+    id: number;
+    display_name: string;
+    modifier: RipenessModifier;
+    previous_expiration_date: string | null;
+    expiration_date: string | null;
+    days_remaining: number | null;
+    discard_recommended: boolean;
+  };
+};
+
+// Mirrors `app.services.recipe.Recipe`.
+export type RecipeIngredient = {
+  name: string;
+  quantity: string;
+  from_pantry: boolean;
+};
+
+export type Recipe = {
+  title: string;
+  servings: number;
+  total_minutes: number;
+  uses_expiring: string[];
+  ingredients: RecipeIngredient[];
+  steps: string[];
+  missing: string[];
+};
+
+export type RecipeResponse = {
+  success: boolean;
+  error?: string;
+  user_id: number;
+  adapted?: boolean;
+  excluded_items?: string[];
+  // What the pantry said was urgent, independent of what the model chose.
+  expiring_soon_in_pantry?: string[];
+  recipe?: Recipe;
+};
+
 export type DemoEvent = {
   id: number;
   title: string;
