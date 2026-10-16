@@ -11,23 +11,16 @@ Postgres database is configured (see that file).
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import BigInteger, Column, String, Table, create_engine, event
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
-from app.models import Base, ShelfLifeRule
+from app.models import Base, ShelfLifeRule, users_table
 
-# `users` is not an ORM model of this app: in production it already exists
-# in Postgres via database/schema.sql (or the real auth system). To exercise
-# the full `pantry_inventory.user_id -> users.id` foreign key against the
-# tests' SQLite, an equivalent stub is registered here in the same `MetaData`
-# as Base.
-users_table = Table(
-    "users",
-    Base.metadata,
-    Column("id", BigInteger, primary_key=True),
-    Column("email", String(255), nullable=False, unique=True),
-    extend_existing=True,
-)
+# `users` used to be declared here, for the tests only. That hid a runtime
+# bug: the application's own metadata had no `users`, so any query that
+# forced foreign-key resolution raised NoReferencedTableError against a real
+# database while the whole suite passed. It now lives in app/models/user.py
+# and is re-exported here so the fixtures below keep working.
 
 
 @pytest.fixture()

@@ -106,3 +106,56 @@ def test_no_column_is_left_as_undetermined_type():
                 f"{model.__tablename__}.{column.name} has no explicit type "
                 "resolvable without another model being imported."
             )
+
+
+def test_users_table_is_registered_in_the_application_metadata():
+    """Regression: `users` was declared only in tests/conftest.py.
+
+    `pantry_inventory.user_id` has a foreign key to `users.id`, and
+    SQLAlchemy resolves that target lazily. With the table registered only by
+    the test fixtures, the whole suite passed while the deployed server
+    raised NoReferencedTableError on any query that forced table sorting.
+    This asserts the application's own metadata carries it, so importing
+    app.models alone is enough.
+    """
+    import importlib
+    import subprocess
+    import sys
+
+    # Checked in a clean interpreter, because conftest has already imported
+    # the test fixtures into this one and would mask the original bug.
+    code = (
+        "from app.models import Base;"
+        "assert 'users' in Base.metadata.tables, 'users missing from metadata';"
+        "print('ok')"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout
+
+
+def test_foreign_keys_resolve_without_test_fixtures():
+    """The join that broke `update_pantry_context` must compile.
+
+    A plain select does not force foreign-key resolution, but a join does,
+    which is why `modify_item_state` worked against a real database and
+    `update_pantry_context` did not.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "from sqlalchemy import select;"
+        "from app.models import PantryInventory, ShelfLifeRule;"
+        "q = select(PantryInventory).outerjoin("
+        "    ShelfLifeRule, ShelfLifeRule.id == PantryInventory.shelf_life_rule_id);"
+        "str(q);"
+        "print('ok')"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout

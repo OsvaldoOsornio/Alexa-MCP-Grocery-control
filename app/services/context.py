@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import PantryInventory, RipenessModifier, ShelfLifeRule
@@ -102,7 +102,12 @@ async def update_pantry_context(
         }
 
     item = matches[0]
-    today = date.today()
+    # Ask the database what day it is rather than Python. CURRENT_DATE is
+    # evaluated in the server's timezone (UTC in the shipped container) and
+    # the status view computes `days_remaining` against it, so using
+    # date.today() here makes the write disagree with the read by a day
+    # whenever the two clocks straddle midnight. The database owns time.
+    today = (await session.execute(select(func.current_date()))).scalar_one()
     previous_expiration = item.expiration_date
     item.custom_expiration_date = _resolve_target_date(
         modifier, previous_expiration, today

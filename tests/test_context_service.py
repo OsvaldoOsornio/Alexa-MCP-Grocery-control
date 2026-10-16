@@ -23,6 +23,16 @@ class ScalarCollectionResult:
         return self.values
 
 
+class ScalarValueResult:
+    """Stands in for the `SELECT CURRENT_DATE` the service issues."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def scalar_one(self):
+        return self.value
+
+
 def _item(item_id: int, name: str, expiration: date | None) -> PantryInventory:
     item = PantryInventory(
         id=item_id,
@@ -36,15 +46,26 @@ def _item(item_id: int, name: str, expiration: date | None) -> PantryInventory:
     return item
 
 
-def _session(items):
-    """A session whose refresh mirrors the trigger: custom date wins."""
+def _session(items, today: date | None = None):
+    """A session whose refresh mirrors the trigger: custom date wins.
+
+    The service issues two queries on the success path: the item lookup, then
+    `SELECT CURRENT_DATE` -- it takes the date from the database rather than
+    from Python, so a write cannot disagree with the status view when the two
+    clocks straddle midnight. `today` lets a test make them differ on purpose.
+    """
 
     async def refresh(item):
         if item.custom_expiration_date is not None:
             item.expiration_date = item.custom_expiration_date
 
     return SimpleNamespace(
-        execute=AsyncMock(return_value=ScalarCollectionResult(items)),
+        execute=AsyncMock(
+            side_effect=[
+                ScalarCollectionResult(items),
+                ScalarValueResult(today or date.today()),
+            ]
+        ),
         commit=AsyncMock(),
         refresh=AsyncMock(side_effect=refresh),
     )
@@ -166,3 +187,26 @@ def test_empty_item_name_is_rejected_before_touching_the_database():
         )
 
     session.execute.assert_not_awaited()
+
+
+def test_dates_come_from_the_database_clock_not_pythons():
+    """Regression: the write must agree with the status view.
+
+    `v_pantry_inventory_status` computes `days_remaining` against the
+    database's CURRENT_DATE, which is UTC in the shipped container. When the
+    local clock is on the other side of midnight, deriving the target date
+    from Python's `date.today()` made the tool report one number while the
+    very next read reported another -- observed live as the tool answering
+    days_remaining=0 and the inventory then showing -1.
+    """
+    db_today = date.today() + timedelta(days=1)  # database is a day ahead
+    item = _item(9, "Avocados", db_today + timedelta(days=6))
+    session = _session([item], today=db_today)
+
+    result = asyncio.run(
+        update_pantry_context(session, 7, "Avocados", RipenessModifier.VERY_RIPE)
+    )
+
+    # Anchored on the database's day, not the local one.
+    assert item.custom_expiration_date == db_today + timedelta(days=1)
+    assert result["item"]["days_remaining"] == 1
