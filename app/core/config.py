@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:changeme@localhost:5432/zero_waste_sous_chef"
 
     aws_region: str = "us-east-1"
-    bedrock_model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    bedrock_model_id: str = "us.anthropic.claude-opus-4-5-20251101-v1:0"
 
     mcp_server_name: str = "zero-waste-sous-chef"
     mcp_server_host: str = "127.0.0.1"

@@ -33,7 +33,7 @@ Two of these make it an agent rather than a CRUD wrapper. `update_pantry_context
 
 ## How it uses Amazon Bedrock
 
-`ingest_receipt_items` sends the receipt image to **Amazon Bedrock** through the **Converse API** with Claude 3.5 Sonnet, using `boto3`. The reply is parsed as strict JSON and validated by a Pydantic model with `extra="forbid"` before anything reaches the database. Extracted ingredients are matched against the `shelf_life_rules` catalog; unmatched items are stored as free items in the pantry.
+`ingest_receipt_items` sends the receipt image to **Amazon Bedrock** through the **Converse API** with Claude Opus 4.5, using `boto3`. The reply is parsed as strict JSON and validated by a Pydantic model with `extra="forbid"` before anything reaches the database. Extracted ingredients are matched against the `shelf_life_rules` catalog; unmatched items are stored as free items in the pantry.
 
 The receipt never decides the expiry date. PostgreSQL does.
 
@@ -52,7 +52,7 @@ flowchart LR
 	ORM --> PG[(PostgreSQL)]
 	PG --> TR[Status view and expiry trigger]
 	SVC --> BOTO[boto3 · Converse]
-	BOTO --> BEDROCK[Amazon Bedrock · Claude 3.5 Sonnet]
+	BOTO --> BEDROCK[Amazon Bedrock · Claude Opus 4.5]
 	BEDROCK --> SVC
 ```
 
@@ -110,7 +110,7 @@ The server listens on `http://127.0.0.1:8000/mcp` by default.
 |---|---|
 | `DATABASE_URL` | Async SQLAlchemy connection; use `postgresql+asyncpg://...` |
 | `AWS_REGION` | Bedrock region |
-| `BEDROCK_MODEL_ID` | Extraction model; Claude 3.5 Sonnet by default |
+| `BEDROCK_MODEL_ID` | Bedrock inference profile ID; Claude Opus 4.5 by default |
 | `MCP_SERVER_HOST`, `MCP_SERVER_PORT` | Streamable HTTP host and port |
 | `MCP_SERVER_NAME` | Name announced by FastMCP |
 
