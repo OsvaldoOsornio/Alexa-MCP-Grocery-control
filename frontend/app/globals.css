@@ -540,6 +540,13 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .bench-fire > svg:last-child { margin-left: auto; }
 .bench-note { margin: 2px 0 0; color: #e8b69f; font-size: 12px; }
 
+.bench-ranout {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+}
+
 .bench-log { display: grid; gap: 10px; align-content: start; }
 .bench-log-list { display: grid; gap: 10px; }
 .bench-log-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
@@ -675,6 +682,26 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   font-size: 15px;
   font-weight: 800;
 }
+.recipe-adapted {
+  margin: 10px 0 0;
+  color: var(--screen-faint);
+  font-family: var(--font-dm-mono), monospace;
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.recipe-adapt-error {
+  margin: 0;
+  padding: 13px 18px;
+  border-left: 5px solid var(--accent-expired);
+  border-radius: 0 9px 9px 0;
+  color: var(--accent-expired);
+  background: rgba(240, 130, 104, .1);
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .recipe-missing {
   margin: 0;
   padding: 13px 18px;

@@ -8,8 +8,8 @@ import { RecipeStage, type RecipeView } from "@/components/recipe-stage";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import {
   byUrgency, createDemoInventory, createDemoReceiptItems, DEMO_USER_ID,
-  formatDate, initialDemoEvents, locationLabel, needsAttention,
-  RIPENESS_UTTERANCES,
+  formatDate, initialDemoEvents, locationLabel,
+  RIPENESS_UTTERANCES, spokenAttention,
   type DemoEvent, type InventoryItem, type InventoryStatusResponse,
   type McpToolName, type PantryContextResponse, type RecipeResponse,
   type RipenessModifier, type StorageLocation, type VoiceTurn,
@@ -65,19 +65,6 @@ function todayIso(): string {
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10);
 }
 
-/** How a voice assistant would read the attention count back out loud. */
-function spokenAttention(items: InventoryItem[]): string {
-  const urgent = items.filter(needsAttention).sort(byUrgency);
-  if (!urgent.length) return "Nothing needs eating today. The pantry is fine.";
-  // Verbatim: lower-casing a display name turns "Whole milk 1L" into
-  // "whole milk 1l", which is worse spoken aloud than the odd capital.
-  const names = urgent.slice(0, 2).map((item) => item.display_name).join(" and ");
-  if (urgent.length === 1) return `One thing needs eating: ${names}.`;
-  return urgent.length > 2
-    ? `${urgent.length} things need eating, starting with ${names}.`
-    : `${urgent.length} things need eating: ${names}.`;
-}
-
 export default function Home() {
   // Starts empty on purpose. Demo data used to seed this, which meant it was
   // server-rendered -- so its dates had to be pinned to a fixed origin to avoid
@@ -128,7 +115,8 @@ export default function Home() {
 
   const isLoading = connection === "checking";
   const activeItems = items.filter((item) => item.status !== "consumed");
-  const attentionItems = activeItems.filter(needsAttention).sort(byUrgency);
+  const eatCount = activeItems.filter((item) => item.status === "expiring_soon").length;
+  const expiredCount = activeItems.filter((item) => item.status === "expired").length;
   const freshCount = activeItems.filter((item) => item.status === "fresh").length;
   const ranked = [...activeItems].sort(byUrgency);
   const shown = ranked.length > CARD_SLOTS ? ranked.slice(0, CARD_SLOTS - 1) : ranked;
@@ -370,6 +358,54 @@ export default function Home() {
     }
   }
 
+  // The mid-cook re-plan. Same tool as handleRecipe, but with `prior_recipe`
+  // and `exclude_items`, which is what switches it from generate to adapt.
+  async function handleRanOut(ingredient: string) {
+    const current = recipeView?.recipe;
+    if (!current) {
+      setToast("Ask what to cook first.");
+      return;
+    }
+
+    const expiringInPantry = recipeView?.expiringInPantry ?? [];
+    setIsWorking(true);
+    setRecipeView({
+      state: "adapting", error: "", recipe: current, expiringInPantry,
+      adaptingWithout: ingredient,
+    });
+    beginTurn(`Alexa, I've run out of ${ingredient}.`, "generate_and_adapt_recipe");
+    try {
+      const result = await invokeTool<RecipeResponse>("generate_and_adapt_recipe", {
+        user_id: DEMO_USER_ID, servings: current.servings,
+        prior_recipe: current.title, exclude_items: [ingredient],
+      });
+      if (!result.success || !result.recipe) {
+        throw new Error(result.error ?? "The recipe tool returned no recipe.");
+      }
+      setRecipeStep(0);
+      setRecipeView({
+        state: "ready", error: "", recipe: result.recipe,
+        expiringInPantry: result.expiring_soon_in_pantry ?? [],
+        adaptedWithout: ingredient,
+      });
+      finishTurn(`No problem. Same dish, without the ${ingredient}.`, "answered");
+      announce("Recipe adapted", `${result.recipe.title} · no ${ingredient}`, "receipt");
+    } catch (error) {
+      // The dish they were following stays on screen with the failure named
+      // beside it. Still nothing invented: no stand-in recipe, no demo data.
+      const message = error instanceof Error
+        ? error.message
+        : "The recipe tool could not be reached.";
+      setRecipeView({
+        state: "ready", error: "", recipe: current, expiringInPantry,
+        adaptError: message,
+      });
+      finishTurn(message, "failed");
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
   return (
     <main className="bench">
       <div className="device-shell">
@@ -384,17 +420,22 @@ export default function Home() {
 
           <section className="ambient" aria-label="Items needing attention">
             <p className="ambient-count">
-              <strong>{isLoading ? "—" : attentionItems.length}</strong>
+              <strong>{isLoading ? "—" : eatCount}</strong>
               <span>
                 {isLoading
                   ? "reading the pantry"
-                  : attentionItems.length === 1
+                  : eatCount === 1
                     ? "item needs eating"
                     : "items need eating"}
                 <small>
                   {isLoading
                     ? "asking the MCP server"
-                    : `${freshCount} ${freshCount === 1 ? "other item is" : "others are"} still fresh`}
+                    : [
+                      expiredCount
+                        ? `${expiredCount} past ${expiredCount === 1 ? "its" : "their"} date, throw out`
+                        : "",
+                      `${freshCount} ${freshCount === 1 ? "other item is" : "others are"} still fresh`,
+                    ].filter(Boolean).join(" · ")}
                 </small>
               </span>
             </p>
@@ -451,6 +492,7 @@ export default function Home() {
         items={items} events={events} isWorking={isWorking}
         onReceipt={handleReceipt} onStateEvent={handleStateEvent}
         onContextEvent={handleContextEvent} onRecipe={handleRecipe}
+        recipe={recipeView?.recipe ?? null} onRanOut={handleRanOut}
       />
 
       {connection === "demo" && (

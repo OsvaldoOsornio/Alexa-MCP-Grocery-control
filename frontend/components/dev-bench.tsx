@@ -9,7 +9,7 @@ import Image from "next/image";
 import { useRef, useState, type ChangeEvent } from "react";
 import {
   RIPENESS_UTTERANCES,
-  type DemoEvent, type InventoryItem, type RipenessModifier,
+  type DemoEvent, type InventoryItem, type Recipe, type RipenessModifier,
   type StorageLocation,
 } from "@/lib/kitchen-data";
 
@@ -31,6 +31,10 @@ type DevBenchProps = {
   onStateEvent(itemId: number, action: StateAction, location: StorageLocation): void;
   onContextEvent(itemName: string, modifier: RipenessModifier): void;
   onRecipe(servings: number): void;
+  // The recipe currently on the device screen, or null when the stage is
+  // closed. The "ran out" control can only offer what the dish actually uses.
+  recipe: Recipe | null;
+  onRanOut(ingredient: string): void;
 };
 
 /**
@@ -45,6 +49,7 @@ type DevBenchProps = {
  */
 export function DevBench({
   items, events, isWorking, onReceipt, onStateEvent, onContextEvent, onRecipe,
+  recipe, onRanOut,
 }: DevBenchProps) {
   const [mode, setMode] = useState<BenchMode>("receipt");
   const [stateAction, setStateAction] = useState<StateAction>("open");
@@ -52,6 +57,7 @@ export function DevBench({
   const [modifier, setModifier] = useState<RipenessModifier>("underripe");
   const [servings, setServings] = useState(2);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [ranOutItem, setRanOutItem] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState("");
   const [benchNote, setBenchNote] = useState("");
@@ -64,6 +70,27 @@ export function DevBench({
     ? (selectedItemId as number)
     : (actionable[0]?.id ?? null);
   const target = actionable.find((item) => item.id === targetId);
+
+  // Only a pantry ingredient can run out in a way the tool can act on. The
+  // rest are the staples it already assumes, so excluding one tells it
+  // nothing about the pantry.
+  const pantryIngredients = (recipe?.ingredients ?? []).filter(
+    (ingredient) => ingredient.from_pantry,
+  );
+  // Defaults away from the items the dish was built to rescue -- excluding one
+  // of those is the least interesting thing to demonstrate.
+  const rescued = recipe?.uses_expiring ?? [];
+  const defaultRanOut =
+    pantryIngredients.find((one) => /whole milk/i.test(one.name))?.name
+    ?? pantryIngredients.find((one) => /milk/i.test(one.name))?.name
+    ?? pantryIngredients.find((one) => !rescued.includes(one.name))?.name
+    ?? pantryIngredients[0]?.name
+    ?? "";
+  // Same fallback shape as `targetId`: the user's own choice wins while it is
+  // still in the list, without an effect that fights it.
+  const ranOutTarget = pantryIngredients.some((one) => one.name === ranOutItem)
+    ? (ranOutItem as string)
+    : defaultRanOut;
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -326,6 +353,45 @@ export function DevBench({
                 {isWorking ? "Calling the tool" : "Ask what to cook"}
                 {!isWorking && <ArrowRight size={15} />}
               </button>
+
+              <div className="bench-ranout">
+                <label className="bench-label" htmlFor="bench-ranout-item">
+                  Ran out mid-cook
+                </label>
+                <p className="bench-hint">
+                  Sends the same tool again with <code>prior_recipe</code> and
+                  <code>exclude_items</code>. That is the adapt path rather than
+                  the generate path: same dish, rebuilt without the thing you
+                  just reached for and did not have.
+                </p>
+                <div className="bench-select">
+                  <select
+                    id="bench-ranout-item" value={ranOutTarget}
+                    onChange={(event) => setRanOutItem(event.target.value)}
+                    disabled={!pantryIngredients.length}
+                  >
+                    {pantryIngredients.length ? (
+                      pantryIngredients.map((one) => (
+                        <option key={one.name} value={one.name}>{one.name}</option>
+                      ))
+                    ) : (
+                      <option value="">Ask what to cook first</option>
+                    )}
+                  </select>
+                  <ChevronDown size={15} />
+                </div>
+                <button
+                  className="bench-fire"
+                  disabled={isWorking || !pantryIngredients.length}
+                  onClick={() => { if (ranOutTarget) onRanOut(ranOutTarget); }}
+                >
+                  {isWorking
+                    ? <LoaderCircle className="spin" size={15} />
+                    : <CookingPot size={15} />}
+                  {isWorking ? "Calling the tool" : "Fire: ran out"}
+                  {!isWorking && <ArrowRight size={15} />}
+                </button>
+              </div>
             </div>
           )}
 

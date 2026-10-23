@@ -2,10 +2,18 @@ import { ArrowLeft, ArrowRight, Clock3, LoaderCircle, TriangleAlert, Users, X } 
 import type { Recipe } from "@/lib/kitchen-data";
 
 export type RecipeView = {
-  state: "working" | "failed" | "ready";
+  state: "working" | "failed" | "ready" | "adapting";
   error: string;
   recipe: Recipe | null;
   expiringInPantry: string[];
+  // Set while the tool is re-planning around something that ran out, and kept
+  // afterwards, so the stage can name the item in both states.
+  adaptingWithout?: string;
+  adaptedWithout?: string;
+  // A re-plan that failed leaves the previous recipe on screen and says so
+  // here. Someone is mid-cook: replacing a working dish with a blank failure
+  // page loses the thing they were following.
+  adaptError?: string;
 };
 
 type RecipeStageProps = {
@@ -33,6 +41,18 @@ export function RecipeStage({ view, step, onStep, onClose }: RecipeStageProps) {
           <LoaderCircle className="spin" size={58} strokeWidth={2.2} />
           <h2>Working out what to cook</h2>
           <p>Reading the pantry by expiry date, soonest first.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (view.state === "adapting") {
+    return (
+      <section className="recipe-stage" aria-label="Recipe">
+        <div className="recipe-center">
+          <LoaderCircle className="spin" size={58} strokeWidth={2.2} />
+          <h2>Re-planning without {view.adaptingWithout}</h2>
+          <p>Keeping the dish, rebuilding around what is still expiring.</p>
         </div>
       </section>
     );
@@ -76,11 +96,20 @@ export function RecipeStage({ view, step, onStep, onClose }: RecipeStageProps) {
               <span className="recipe-rescues" key={name}>Uses {name}</span>
             ))}
           </p>
+          {view.adaptedWithout ? (
+            <p className="recipe-adapted">Adapted: no {view.adaptedWithout}</p>
+          ) : null}
         </div>
         <button className="recipe-exit small" onClick={onClose} aria-label="Close the recipe">
           <X size={22} />
         </button>
       </header>
+
+      {view.adaptError ? (
+        <p className="recipe-adapt-error" role="status">
+          Could not re-plan this dish: {view.adaptError} Try firing it again.
+        </p>
+      ) : null}
 
       {recipe.missing.length ? (
         <p className="recipe-missing">
