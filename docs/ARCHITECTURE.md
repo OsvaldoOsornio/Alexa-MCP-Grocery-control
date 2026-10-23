@@ -2,6 +2,86 @@
 
 Module-level detail and the full MCP tool contracts. For setup and a product overview, see the [README](../README.md).
 
+## In twenty seconds
+
+Alexa+ connects to a self-hosted MCP server that speaks specification 2025-11-25 over Streamable HTTP. That server exposes five typed tools over one pantry held in PostgreSQL. Amazon Bedrock is called twice, for two different jobs: once to read a receipt photograph into structured line items, once to reason about what to cook from what is about to expire. Expiry itself is computed by a PostgreSQL trigger, never in application code, so the voice channel and the screen cannot disagree. The Next.js Echo Show surface is a second consumer of the same MCP server, not a layer on top of it.
+
+## System
+
+```mermaid
+flowchart LR
+    U["Person<br/>(voice)"] --> AX["Alexa+ / MCP client"]
+    U --> UI["Echo Show surface<br/>Next.js · frontend/app/page.tsx"]
+
+    AX -->|"MCP · Streamable HTTP<br/>spec 2025-11-25"| MCP
+    UI --> RP["Route Handler proxy<br/>frontend/app/api/mcp/route.ts"]
+    RP -->|"tools/call"| MCP
+
+    MCP["FastMCP server<br/>app/main.py"] --> T["Five MCP tools<br/>app/tools/"]
+    T --> SVC["Services<br/>app/services/"]
+
+    SVC -->|"boto3 · Converse"| BR["Amazon Bedrock<br/>Claude Sonnet 4.5"]
+    SVC -->|"SQLAlchemy async"| PG[("PostgreSQL 17")]
+    PG --> TR["Expiry trigger +<br/>v_pantry_inventory_status"]
+    TR --> PG
+```
+
+The browser never reaches PostgreSQL, AWS or the MCP endpoint directly. It asks the Route Handler, which negotiates a server-to-server MCP session.
+
+## Receipt upload, end to end
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Dev bench<br/>dev-bench.tsx
+    participant API as Route Handler<br/>api/mcp/route.ts
+    participant MCP as FastMCP<br/>app/main.py
+    participant SVC as inventory.py
+    participant BR as Amazon Bedrock
+    participant PG as PostgreSQL
+
+    User->>UI: choose receipt photo
+    UI->>UI: FileReader → base64, strip data URL
+    UI->>API: POST {tool, arguments}
+    API->>API: check tool against allow-list
+    API->>MCP: initialize → Mcp-Session-Id
+    API->>MCP: tools/call ingest_receipt_items
+    MCP->>SVC: decode, validate type and 5 MB limit
+    SVC->>PG: SELECT shelf_life_rules (catalog)
+    SVC->>BR: converse(image + catalog-constrained prompt)
+    BR-->>SVC: JSON line items (fenced; fence stripped)
+    SVC->>SVC: validate, extra="forbid"
+    SVC->>PG: INSERT pantry_inventory
+    PG->>PG: trigger computes expiration_date
+    PG-->>SVC: rows with expiry assigned
+    SVC-->>API: structuredContent
+    API-->>UI: items + dates
+    UI-->>User: transcript names the tool; cards appear
+```
+
+A failure is shown as a failure. No credentials produces a real error state, never a stubbed recipe or an invented date.
+
+## Components
+
+| Component | Responsibility | Path | Track / AWS tech |
+|---|---|---|---|
+| MCP server | Builds FastMCP, runs Streamable HTTP | `app/main.py` | **Alexa+ / MCP 2025-11-25** |
+| Inventory tools | 4 of the 5 tool definitions | `app/tools/inventory.py` | MCP |
+| Recipe tool | Generate and adapt | `app/tools/recipe.py` | MCP |
+| Error boundary | Stops OS errors reaching clients | `app/tools/errors.py` | MCP |
+| Bedrock plumbing | Converse client, fence strip, validation | `app/services/bedrock.py` | **Amazon Bedrock** |
+| Receipt extraction | Photo to structured items | `app/services/inventory.py` | **Amazon Bedrock** |
+| Recipe reasoning | Plan and re-plan around expiry | `app/services/recipe.py` | **Amazon Bedrock** |
+| Spoken context | Voice overrides shelf life | `app/services/context.py` | MCP |
+| Expiry engine | Owns every expiration date | `database/schema.sql` | PostgreSQL trigger |
+| Echo Show surface | 1280x800 ambient screen | `frontend/app/page.tsx` | — |
+| MCP proxy | Server-side, tool allow-list | `frontend/app/api/mcp/route.ts` | MCP |
+| MCP client | Session negotiation, tools/call | `frontend/lib/mcp-client.ts` | MCP |
+
+## Built during the hackathon window
+
+All of it. First commit 2026-09-28; nothing pre-existing.
+
 ## Layers
 
 ```
