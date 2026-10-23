@@ -351,6 +351,50 @@ export function needsAttention(item: InventoryItem): boolean {
   return item.status === "expired" || item.status === "expiring_soon";
 }
 
+// A rough guess at whether a display name reads as plural ("Vine tomatoes",
+// "Lemons") so the verb agrees when it is spoken. "Hummus" and "Swiss chard"
+// end in s without being plural, hence the exclusions.
+function soundsPlural(name: string): boolean {
+  const last = name.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
+  return last.endsWith("s") && !last.endsWith("ss") && !last.endsWith("us");
+}
+
+// "X and Y", verbatim: lower-casing a display name turns "Whole milk 1L" into
+// "whole milk 1l", which is worse spoken aloud than the odd capital.
+function spokenNames(items: InventoryItem[]): string {
+  return items.slice(0, 2).map((item) => item.display_name).join(" and ");
+}
+
+/**
+ * How a voice assistant would read the attention list back out loud. Expired
+ * items get their own sentence: telling someone to eat something past its
+ * date is the one thing this product must never say.
+ */
+export function spokenAttention(items: InventoryItem[]): string {
+  const eat = items.filter((item) => item.status === "expiring_soon").sort(byUrgency);
+  const bin = items.filter((item) => item.status === "expired").sort(byUrgency);
+  if (!eat.length && !bin.length) return "Nothing needs eating today. The pantry is fine.";
+
+  const sentences: string[] = [];
+  if (eat.length > 2) {
+    sentences.push(`${eat.length} things need eating, starting with ${spokenNames(eat)}.`);
+  } else if (eat.length) {
+    const plural = eat.length > 1 || soundsPlural(eat[0].display_name);
+    sentences.push(`${spokenNames(eat)} ${plural ? "need" : "needs"} eating.`);
+  }
+  if (bin.length > 2) {
+    sentences.push(
+      `${bin.length} things are past their date, starting with ${spokenNames(bin)}. Throw them out.`,
+    );
+  } else if (bin.length) {
+    const plural = bin.length > 1 || soundsPlural(bin[0].display_name);
+    sentences.push(plural
+      ? `${spokenNames(bin)} are past their date, throw them out.`
+      : `${spokenNames(bin)} is past its date, throw it out.`);
+  }
+  return sentences.join(" ");
+}
+
 // Split into a numeral and a word so the card can set the numeral in display
 // type and still keep the word that makes it unambiguous at two metres.
 export function dayCountdown(days: number | null): { value: string; unit: string } {
