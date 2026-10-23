@@ -3,6 +3,16 @@ import type { McpToolName } from "@/lib/kitchen-data";
 const MCP_PROTOCOL_VERSION = "2025-11-25";
 const ACCEPT_HEADER = "application/json, text/event-stream";
 
+// Handshake and teardown talk to a local process and should fail fast, so a
+// dead server surfaces immediately instead of hanging the screen. Only
+// `tools/call` waits: `ingest_receipt_items` and `generate_and_adapt_recipe`
+// are Bedrock round trips, and a receipt is a vision call. The server bounds
+// itself below this (see BEDROCK_READ_TIMEOUT in app/services/bedrock.py), so
+// a stuck call is reported by the server rather than guessed at from here.
+const HANDSHAKE_TIMEOUT_MS = 10_000;
+const TOOL_CALL_TIMEOUT_MS = 120_000;
+const TEARDOWN_TIMEOUT_MS = 2_000;
+
 type JsonRpcPayload = {
   error?: { message?: string };
   result?: {
@@ -34,6 +44,7 @@ async function postRpc(
   endpoint: string,
   payload: Record<string, unknown>,
   sessionId?: string,
+  timeoutMs: number = HANDSHAKE_TIMEOUT_MS,
 ): Promise<{ response: Response; payload: JsonRpcPayload }> {
   const response = await fetch(endpoint, {
     method: "POST",
@@ -44,7 +55,7 @@ async function postRpc(
       ...(sessionId ? { "Mcp-Session-Id": sessionId } : {}),
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(12_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok && response.status !== 202) {
     throw new Error(`MCP responded with HTTP ${response.status}.`);
@@ -90,6 +101,7 @@ export async function callMcpTool<T>(
         params: { name, arguments: args },
       },
       sessionId ?? undefined,
+      TOOL_CALL_TIMEOUT_MS,
     );
     if (call.payload.error) {
       throw new Error(call.payload.error.message ?? `The ${name} tool failed.`);
@@ -112,7 +124,7 @@ export async function callMcpTool<T>(
       await fetch(endpoint, {
         method: "DELETE",
         headers: { "Mcp-Session-Id": sessionId, Accept: ACCEPT_HEADER },
-        signal: AbortSignal.timeout(2_000),
+        signal: AbortSignal.timeout(TEARDOWN_TIMEOUT_MS),
       }).catch(() => undefined);
     }
   }

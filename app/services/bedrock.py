@@ -17,6 +17,7 @@ import json
 from typing import Any, TypeVar
 
 import boto3
+from botocore.config import Config
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
@@ -24,10 +25,35 @@ from app.core.config import get_settings
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
+# A receipt extraction is a vision call and the slowest thing the server does;
+# measured round trips sit around 6 seconds for text alone. The caller that
+# matters is the Next.js proxy, which aborts `tools/call` after 120 seconds, so
+# the budget here is sized to stay inside that: two attempts of 50 seconds
+# leaves room for a retry after a throttle without ever outlasting the client.
+# botocore would otherwise default to a 60 second read with legacy retries,
+# which can run past the client and strand a call nobody is still waiting for.
+BEDROCK_CONNECT_TIMEOUT = 10
+BEDROCK_READ_TIMEOUT = 50
+# `total_max_attempts` rather than `max_attempts`: botocore reads the latter as
+# a retry count and silently resolves it to one attempt more than asked for.
+BEDROCK_TOTAL_MAX_ATTEMPTS = 2
+
+
 def get_client() -> Any:
     """Return a `bedrock-runtime` client for the configured region."""
     settings = get_settings()
-    return boto3.client("bedrock-runtime", region_name=settings.aws_region)
+    return boto3.client(
+        "bedrock-runtime",
+        region_name=settings.aws_region,
+        config=Config(
+            connect_timeout=BEDROCK_CONNECT_TIMEOUT,
+            read_timeout=BEDROCK_READ_TIMEOUT,
+            retries={
+                "mode": "standard",
+                "total_max_attempts": BEDROCK_TOTAL_MAX_ATTEMPTS,
+            },
+        ),
+    )
 
 
 def response_text(response: dict[str, Any]) -> str:
